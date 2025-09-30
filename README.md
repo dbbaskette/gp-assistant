@@ -18,6 +18,7 @@ This project provides a **production-ready RAG (Retrieval-Augmented Generation)*
 *   **📊 Production-Grade Metrics**: Integrated Prometheus metrics via Spring Boot Actuator for easy monitoring.
 *   **🛡️ Robust Error Handling**: Comprehensive request validation and global exception handling for a stable application.
 *   **⚙️ Highly Configurable**: Externalized configuration for easy customization via `application.yaml` or environment variables.
+*   **💬 Liquid Glass Chat UI**: Sleek, metallic chat experience with streaming-like feedback, chat memory, and live model telemetry.
 
 ---
 
@@ -223,6 +224,20 @@ The application will typically start on port `8080`.
 
 ---
 
+## 🖥️ Chat Experience
+
+Open `http://localhost:8080` and you will land on the new liquid-glass chat workspace. Highlights:
+
+- Real-time conversation bubbles with a metallic / glass aesthetic tailored for dark rooms.
+- Local storage conversation IDs keep Spring AI chat memory threads intact between refreshes.
+- Live telemetry chip showing the active model, base URL, and embedding endpoint negotiated at startup.
+- Version selector for quick pivots across Greenplum and PostgreSQL baselines.
+- Keyboard friendly composer (`Enter` to send, `Shift+Enter` for multi-line input) plus automatic resizing.
+
+The UI talks directly to `/api/chat/message`, a JSON endpoint powered by the existing `DocsChatService` + Spring AI ChatClient/Advisor stack. You can still call `/api/ask` for plain-text responses or use the new `/api/chat/config` for runtime metadata.
+
+---
+
 ## 📡 API Endpoints
 
 ### 💬 Ask Questions
@@ -253,6 +268,11 @@ curl -s -X POST http://localhost:8080/api/ask \
     "conversationId":"my-session"
   }'
 ```
+
+### 🧠 Interactive Chat
+
+- `POST /api/chat/message` — JSON payload/response for the glass chat experience. Returns the assistant answer, active conversation ID, timestamp, and model details.
+- `GET /api/chat/config` — Lightweight metadata endpoint exposing the resolved base URLs, embedding endpoint, models, and a conversation ID seed.
 
 ### 🧑‍💻 Admin Endpoints
 

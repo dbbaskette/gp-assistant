@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenplum AI Assistant</title>
+    <link rel="stylesheet" href="/assets/css/chat.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" src="/assets/js/chat.js" defer></script>
+</head>
+<body>
+    <div class="aurora"></div>
+    <div class="aurora aurora--two"></div>
+    <main class="chat-app">
+        <header class="chat-app__header">
+            <div>
+                <h1>Greenplum AI Assistant</h1>
+                <p class="chat-app__subtitle">RAG-powered guidance for Greenplum and PostgreSQL</p>
+            </div>
+            <div class="chat-app__meta">
+                <div class="meta-line">
+                    <span class="dot dot--online"></span>
+                    <span id="model-mode">Detecting model…</span>
+                </div>
+                <div class="meta-line" id="endpoint-meta"></div>
+            </div>
+        </header>
+
+        <section class="chat-app__console" id="chat-window" aria-live="polite"></section>
+
+        <footer class="chat-app__footer">
+            <form id="chat-form" autocomplete="off">
+                <div class="composer">
+                    <div class="composer__controls">
+                        <label for="target-version" class="composer__label">Target version</label>
+                        <select id="target-version" class="composer__select">
+                            <option value="7.0">Greenplum 7.x</option>
+                            <option value="6.0">Greenplum 6.x</option>
+                            <option value="5.0">Greenplum 5.x</option>
+                            <option value="postgresql">PostgreSQL</option>
+                        </select>
+                    </div>
+                    <div class="composer__input">
+                        <textarea id="chat-input" placeholder="Ask anything about Greenplum… (Shift + Enter for new line)" rows="1" required></textarea>
+                    </div>
+                    <button type="submit" class="composer__send" aria-label="Send message">
+                        <span class="send-icon"></span>
+                    </button>
+                </div>
+            </form>
+        </footer>
+    </main>
+    <template id="message-template">
+        <article class="message">
+            <div class="message__avatar"></div>
+            <div class="message__bubble">
+                <div class="message__author"></div>
+                <div class="message__body"></div>
+            </div>
+        </article>
+    </template>
+</body>
+</html>
