@@ -2,7 +2,7 @@ spring:
   application:
     name: gp-assistant
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:15432/postgres}
+    url: ${DB_URL:jdbc:postgresql://localhost:15432/gp_assistant}
     username: ${DB_USERNAME:gpadmin}
     password: ${DB_PASSWORD:VMware1!}
     hikari:
@@ -15,11 +15,14 @@ spring:
       api-key: ${OPENAI_API_KEY}
       chat:
         options:
-          model: gpt-5-nano
-          temperature: 1
+          model: ${OPENAI_CHAT_MODEL:gpt-5-nano}
+          temperature: ${OPENAI_CHAT_TEMPERATURE:1}
       embedding:
+        base-url: ${OPENAI_EMBEDDING_BASE_URL:https://api.openai.com/v1}
+        embeddings-path: ${OPENAI_EMBEDDINGS_PATH:/v1/embeddings}
+        api-key: ${OPENAI_EMBEDDING_API_KEY:${OPENAI_API_KEY}}
         options:
-          model: text-embedding-3-small
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
     mcp:
       client:
         # Set to false to disable MCP client when no servers are configured
@@ -81,3 +84,5 @@ logging:
     org.flywaydb: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+  file:
+    name: ${APP_LOG_FILE:#{null}}

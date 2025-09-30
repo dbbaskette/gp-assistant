@@ -78,6 +78,29 @@ app:
     similarity-threshold: 0.7 # Minimum similarity score (0.0-1.0)
 ```
 
+### 🪵 Local Log File (optional)
+
+Mirror console logs to a local file during development by setting an environment variable before you start the app:
+
+```bash
+export APP_LOG_FILE="logs/gp-assistant.log"
+```
+
+Leave `APP_LOG_FILE` unset (or empty) to keep console-only logging.
+
+### 🤖 Local Embedding Endpoint (optional)
+
+Point embeddings to any OpenAI-compatible server—such as a local model—without affecting chat completions:
+
+```bash
+export OPENAI_EMBEDDING_BASE_URL="http://127.0.0.1:1234"
+export OPENAI_EMBEDDING_MODEL="text-embedding-nomic-embed-text-v2"
+# Optional: override the embeddings path if your server differs from the default
+export OPENAI_EMBEDDINGS_PATH="/v1/embeddings"
+```
+
+If the local endpoint requires a different key than `OPENAI_API_KEY`, set `OPENAI_EMBEDDING_API_KEY`. Leave it empty when no key is needed.
+
 ### 🌐 MCP Client Configuration
 
 The MCP client is **disabled by default**. Enable it when your MCP servers are ready:

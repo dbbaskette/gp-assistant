@@ -3,4 +3,6 @@ target/
 *.iml
 *.log
 .DS_Store
-.env
+.env*.yml
+*.properties
+*.env

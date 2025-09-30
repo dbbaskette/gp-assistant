@@ -13,7 +13,7 @@
 
   <groupId>com.baskettecase</groupId>
   <artifactId>gp-assistant</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.0.2</version>
   <name>gp-assistant</name>
   <description>Greenplum Assistant - Spring Boot + Spring AI RAG</description>
 
@@ -45,6 +45,12 @@
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
       <version>10.14.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+      <version>10.14.0</version>
+      <scope>runtime</scope>
     </dependency>
 
     <!-- Spring AI: OpenAI + VectorStore (pgvector) + PDF reader + MCP -->

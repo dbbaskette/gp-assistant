@@ -1,5 +1,6 @@
--- Enable pgvector once per database (idempotent)
-CREATE EXTENSION IF NOT EXISTS pgvector;
+-- Enable vector extension once per database (idempotent)
+-- Note: In Greenplum, the extension is called 'vector' not 'pgvector'
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- RAG chunks table for the Greenplum docs
 -- NOTE: embedding dimension must match your embedding model
@@ -10,13 +11,15 @@ CREATE TABLE IF NOT EXISTS public.gp_docs (
   chunk_index  int         NOT NULL,               -- chunk sequence within a doc
   content      text        NOT NULL,               -- chunk text
   metadata     jsonb       DEFAULT '{}'::jsonb,    -- {page, section, source, ...}
-  embedding    vector(1536)                        -- adjust if you use a different model
+  embedding    vector(1536)                        -- OpenAI text-embedding-3-small dimensions
 )
 DISTRIBUTED BY (id);
 
+-- Note: In Greenplum, UNIQUE constraints must include distribution key (id)
+-- We'll create a unique constraint that includes the id column
 ALTER TABLE public.gp_docs
-  ADD CONSTRAINT IF NOT EXISTS gp_docs_doc_and_index_unique
-  UNIQUE (doc_id, chunk_index);
+  ADD CONSTRAINT gp_docs_doc_and_index_unique
+  UNIQUE (id, doc_id, chunk_index);
 
 CREATE INDEX IF NOT EXISTS gp_docs_docid_idx
   ON public.gp_docs (doc_id, chunk_index);
