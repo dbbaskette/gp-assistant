@@ -11,18 +11,25 @@ spring:
       connection-timeout: 30000
       idle-timeout: 600000
   ai:
+    retry:
+      max-attempts: 1
+      backoff:
+        initial-interval: 1000
+        multiplier: 2
+        max-interval: 10000
     openai:
-      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL:${LOCAL_MODEL_BASE_URL:http://127.0.0.1:1234}}
+      api-key: ${OPENAI_API_KEY:local-key}
       chat:
         options:
-          model: ${OPENAI_CHAT_MODEL:gpt-5-nano}
-          temperature: ${OPENAI_CHAT_TEMPERATURE:1}
+          model: ${OPENAI_CHAT_MODEL:${LOCAL_CHAT_MODEL:local-chat-model}}
+          temperature: ${OPENAI_CHAT_TEMPERATURE:0.8}
       embedding:
-        base-url: ${OPENAI_EMBEDDING_BASE_URL:https://api.openai.com/v1}
-        embeddings-path: ${OPENAI_EMBEDDINGS_PATH:/v1/embeddings}
-        api-key: ${OPENAI_EMBEDDING_API_KEY:${OPENAI_API_KEY}}
+        base-url: ${OPENAI_EMBEDDING_BASE_URL:${LOCAL_MODEL_BASE_URL:http://127.0.0.1:1234}}
+        api-key: ${OPENAI_EMBEDDING_API_KEY:${OPENAI_API_KEY:local-key}}
         options:
-          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+          model: ${OPENAI_EMBEDDING_MODEL:${LOCAL_EMBEDDING_MODEL:text-embedding-nomic-embed-text-v2}}
+          dimensions: 768
     mcp:
       client:
         # Set to false to disable MCP client when no servers are configured
@@ -53,6 +60,13 @@ app:
     pdf-url: https://techdocs.broadcom.com/content/dam/broadcom/techdocs/us/en/pdf/vmware-tanzu/data-solutions/tanzu-greenplum/7/greenplum-database/greenplum-database.pdf
     # Enable automatic ingestion on startup (default: true)
     ingest-on-startup: ${DOCS_INGEST_ON_STARTUP:true}
+    # Batch size for embedding generation (reduce if you get timeouts)
+    batch-size: ${DOCS_BATCH_SIZE:50}
+    # Pages to process per batch during PDF parsing
+    pages-per-batch: ${DOCS_PAGES_PER_BATCH:50}
+  vectorstore:
+    # Force embedding dimension used for schema creation (match your embedding model)
+    dimensions: ${APP_VECTORSTORE_DIMENSIONS:1536}
   rag:
     # Maximum number of relevant documents to retrieve
     top-k: ${RAG_TOP_K:5}
@@ -75,14 +89,26 @@ management:
       prometheus:
         enabled: true
 
+# HTTP client configuration for Spring AI calls
+spring.mvc.async.request-timeout: 60000  # 60 seconds
+
+# RestClient configuration
+spring.http.client.connect-timeout: 10s
+spring.http.client.read-timeout: 60s
+
 # Logging configuration
 logging:
   level:
     root: INFO
-    com.example.gpassistant: DEBUG
-    org.springframework.ai: DEBUG
+    com.baskettecase.gpassistant: DEBUG
+    org.springframework.ai: TRACE
+    org.springframework.ai.vectorstore: TRACE
+    org.springframework.ai.openai: TRACE
+    org.springframework.web.reactive.function.client: DEBUG
+    reactor.netty.http.client: DEBUG
+    org.springframework.web.client: DEBUG
     org.flywaydb: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
   file:
-    name: ${APP_LOG_FILE:#{null}}
+    name: ${APP_LOG_FILE:}

@@ -19,6 +19,7 @@ NC='\033[0m' # No Color
 # Default options
 BUILD=false
 CLEAN=false
+ENV_FILE=".env"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -47,12 +48,12 @@ while [[ $# -gt 0 ]]; do
             echo "  ./run.sh -b             # Build and run"
             echo "  ./run.sh -c             # Clean build and run"
             echo ""
-            echo "Environment Variables Required:"
-            echo "  OPENAI_API_KEY          Your OpenAI API key"
-            echo ""
-            echo "Optional Environment Variables:"
-            echo "  MCP_CLIENT_ENABLED      Enable MCP client (default: false)"
-            echo "  DOCS_INGEST_ON_STARTUP  Ingest docs on startup (default: true)"
+            echo "Environment Variables (all optional):"
+            echo "  OPENAI_API_KEY             Route traffic to OpenAI when provided"
+            echo "  LOCAL_MODEL_BASE_URL       Override local gateway base URL"
+            echo "  APP_VECTORSTORE_DIMENSIONS Match pgvector schema to embedding width"
+            echo "  MCP_CLIENT_ENABLED         Enable MCP client (default: false)"
+            echo "  DOCS_INGEST_ON_STARTUP     Ingest docs on startup (default: true)"
             exit 0
             ;;
         *)
@@ -63,11 +64,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if OPENAI_API_KEY is set
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo -e "${RED}Error: OPENAI_API_KEY environment variable is not set${NC}"
-    echo "Please set it with: export OPENAI_API_KEY=your-api-key"
-    exit 1
+# Auto-load .env if present (allows simple KEY=value entries)
+if [ -f "$ENV_FILE" ]; then
+    echo -e "${BLUE}==> Loading environment from ${ENV_FILE}${NC}"
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
 fi
 
 # Build if requested
@@ -98,4 +101,26 @@ echo ""
 
 # Run the application
 echo -e "${GREEN}==> Running application...${NC}"
+
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo -e "${YELLOW}→ No OPENAI_API_KEY detected. Using local model defaults.${NC}"
+    CHAT_MODEL_DISPLAY=${LOCAL_CHAT_MODEL:-local-chat-model}
+    EMBED_MODEL_DISPLAY=${LOCAL_EMBEDDING_MODEL:-local-embedding-model}
+    BASE_URL_DISPLAY=${OPENAI_BASE_URL:-${LOCAL_MODEL_BASE_URL:-http://127.0.0.1:1234}}
+    EMBED_BASE_URL_DISPLAY=${OPENAI_EMBEDDING_BASE_URL:-$BASE_URL_DISPLAY}
+else
+    echo -e "${GREEN}→ OPENAI_API_KEY detected. Using OpenAI endpoints.${NC}"
+    CHAT_MODEL_DISPLAY=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+    EMBED_MODEL_DISPLAY=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+    BASE_URL_DISPLAY=${OPENAI_BASE_URL:-https://api.openai.com}
+    EMBED_BASE_URL_DISPLAY=${OPENAI_EMBEDDING_BASE_URL:-$BASE_URL_DISPLAY}
+fi
+
+EMBED_PATH_DISPLAY=${OPENAI_EMBEDDINGS_PATH:-/v1/embeddings}
+
+echo -e "${BLUE}Chat model: ${CHAT_MODEL_DISPLAY}${NC}"
+echo -e "${BLUE}Embedding model: ${EMBED_MODEL_DISPLAY}${NC}"
+echo -e "${BLUE}Base URL: ${BASE_URL_DISPLAY}${NC}"
+echo -e "${BLUE}Embedding endpoint: ${EMBED_BASE_URL_DISPLAY}${EMBED_PATH_DISPLAY}${NC}"
+
 ./mvnw spring-boot:run

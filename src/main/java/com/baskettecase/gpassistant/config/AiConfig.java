@@ -28,14 +28,23 @@ public class AiConfig {
     @Value("${app.rag.similarity-threshold:0.7}")
     private double ragSimilarityThreshold;
 
+    @Value("${app.vectorstore.dimensions:1536}")
+    private int vectorStoreDimensions;
+
     @Bean
     public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingModel) {
-        log.info("Configuring PgVectorStore with table: gp_docs");
-        return PgVectorStore.builder(jdbcTemplate, embeddingModel)
+        log.info("Configuring PgVectorStore with table: gp_docs (dimensions={})", vectorStoreDimensions);
+
+        var builder = PgVectorStore.builder(jdbcTemplate, embeddingModel)
                 .schemaName("public")
                 .vectorTableName("gp_docs")
-                .initializeSchema(true)
-                .build();
+                .initializeSchema(true);
+
+        if (vectorStoreDimensions > 0) {
+            builder.dimensions(vectorStoreDimensions);
+        }
+
+        return builder.build();
     }
 
     @Bean

@@ -28,7 +28,7 @@ Before you begin, ensure you have the following installed:
 *   **Java 21**: The application is built with the latest LTS Java version.
 *   **Maven 3.9+**: The project uses a Maven Wrapper (`./mvnw`), so a local Maven installation is optional but recommended for advanced tasks.
 *   **Greenplum or PostgreSQL**: A running database instance with the `pgvector` extension enabled.
-*   **OpenAI API Key**: Required for generating document embeddings and chat completions.
+*   **OpenAI API Key (optional)**: Supply to route chat and embeddings through OpenAI; otherwise the app targets a local OpenAI-compatible server.
 
 ---
 
@@ -48,13 +48,47 @@ spring:
     password: ${DB_PASSWORD:secret}
 ```
 
-### 🔑 OpenAI API Key
+### 🤖 Model Provider Selection
 
-Set your OpenAI API key as an environment variable:
+By default the assistant talks to a local OpenAI-compatible gateway at `http://127.0.0.1:1234`. Adjust (or disable) the local setup with:
 
 ```bash
-export OPENAI_API_KEY=sk-... # Replace with your actual key
+export LOCAL_MODEL_BASE_URL="http://127.0.0.1:1234"
+export LOCAL_CHAT_MODEL="local-chat-model"
+export LOCAL_EMBEDDING_MODEL="local-embedding-model"
+# Optional: provide a key if your local gateway is secured
+export LOCAL_MODEL_API_KEY="local-mode-placeholder"
 ```
+
+Provide an OpenAI key to automatically switch both chat and embeddings to OpenAI. You can still override model IDs if you prefer specific variants:
+
+```bash
+export OPENAI_API_KEY=sk-...                      # Supplying a key flips to OpenAI mode
+export OPENAI_CHAT_MODEL=gpt-4o-mini              # Optional override
+export OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # Optional override
+export OPENAI_EMBEDDING_API_KEY=sk-...            # Optional different embedding key
+```
+
+For any other OpenAI-compatible provider, set `OPENAI_BASE_URL` and/or `OPENAI_EMBEDDING_BASE_URL` to the correct endpoint. If the embeddings path differs from `/v1/embeddings`, override `OPENAI_EMBEDDINGS_PATH`.
+
+| Environment Variable            | Purpose                                                            | Default / Notes                |
+|---------------------------------|--------------------------------------------------------------------|--------------------------------|
+| `LOCAL_MODEL_BASE_URL`          | Base URL for the local OpenAI-compatible gateway                   | `http://127.0.0.1:1234`        |
+| `LOCAL_CHAT_MODEL`              | Identifier for the local chat model                                | `local-chat-model`             |
+| `LOCAL_EMBEDDING_MODEL`         | Identifier for the local embedding model                           | `local-embedding-model`        |
+| `LOCAL_MODEL_API_KEY`           | Optional auth token for the local gateway                          | _not set_                      |
+| `OPENAI_API_KEY`                | Switches the app into OpenAI mode and authorizes API calls         | _provide manually_             |
+| `OPENAI_CHAT_MODEL`             | Override the OpenAI chat model ID                                  | `gpt-4o-mini`                  |
+| `OPENAI_EMBEDDING_MODEL`        | Override the OpenAI embedding model ID                             | `text-embedding-3-small`       |
+| `OPENAI_EMBEDDING_API_KEY`      | Optional alternate key for embeddings                              | _inherits `OPENAI_API_KEY`_    |
+| `OPENAI_BASE_URL`               | Custom OpenAI-compatible base URL for chat                         | `https://api.openai.com` (falls back to local base when unset) |
+| `OPENAI_EMBEDDING_BASE_URL`     | Custom OpenAI-compatible base URL for embeddings                   | Inherits chat base unless set  |
+| `OPENAI_EMBEDDINGS_PATH`        | Embedding endpoint path when the provider differs from `/v1/...`   | `/v1/embeddings`               |
+| `OPENAI_CHAT_TEMPERATURE`       | Chat completion temperature                                        | `0.8`                          |
+| `APP_VECTORSTORE_DIMENSIONS`    | Embedding width used for pgvector schema                           | `1536`                         |
+| `DOCS_INGEST_ON_STARTUP`        | Automatically ingest docs at boot                                  | `true`                         |
+| `MCP_CLIENT_ENABLED`            | Toggle MCP client integration                                      | `false`                        |
+| `APP_LOG_FILE`                  | Optional logback file output                                       | _not set_                      |
 
 ### 📑 Document Ingestion Settings
 
@@ -78,6 +112,20 @@ app:
     similarity-threshold: 0.7 # Minimum similarity score (0.0-1.0)
 ```
 
+### 📦 Vector Store Dimensions
+
+Ensure the pgvector schema matches the width of your embedding model:
+
+```yaml
+app:
+  vectorstore:
+    dimensions: 1536 # Use APP_VECTORSTORE_DIMENSIONS env var to override
+```
+
+```bash
+export APP_VECTORSTORE_DIMENSIONS=1024
+```
+
 ### 🪵 Local Log File (optional)
 
 Mirror console logs to a local file during development by setting an environment variable before you start the app:
@@ -87,19 +135,6 @@ export APP_LOG_FILE="logs/gp-assistant.log"
 ```
 
 Leave `APP_LOG_FILE` unset (or empty) to keep console-only logging.
-
-### 🤖 Local Embedding Endpoint (optional)
-
-Point embeddings to any OpenAI-compatible server—such as a local model—without affecting chat completions:
-
-```bash
-export OPENAI_EMBEDDING_BASE_URL="http://127.0.0.1:1234"
-export OPENAI_EMBEDDING_MODEL="text-embedding-nomic-embed-text-v2"
-# Optional: override the embeddings path if your server differs from the default
-export OPENAI_EMBEDDINGS_PATH="/v1/embeddings"
-```
-
-If the local endpoint requires a different key than `OPENAI_API_KEY`, set `OPENAI_EMBEDDING_API_KEY`. Leave it empty when no key is needed.
 
 ### 🌐 MCP Client Configuration
 
@@ -168,7 +203,7 @@ export DOCS_INGEST_ON_STARTUP=true
 A `run.sh` (for Unix/macOS/Linux) and `run.bat` (for Windows) script are provided for convenience.
 
 ```bash
-# Set your OpenAI API key (if not already set)
+# (Optional) Supply an OpenAI key if you want to use OpenAI instead of your local model
 export OPENAI_API_KEY=sk-your-openai-api-key
 
 # First time setup: clean build and run
@@ -180,6 +215,9 @@ export OPENAI_API_KEY=sk-your-openai-api-key
 # If you make code changes: build and run
 ./run.sh -b
 ```
+
+Both scripts auto-load `.env` (when present) and print the chat/embedding models they will use before launching.
+They also show the resolved base URL and embedding endpoint, so you can confirm requests will hit the right server.
 
 The application will typically start on port `8080`.
 
