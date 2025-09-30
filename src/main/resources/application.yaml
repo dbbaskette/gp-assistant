@@ -2,7 +2,7 @@ spring:
   application:
     name: gp-assistant
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:15432/gpdb}
+    url: ${DB_URL:jdbc:postgresql://localhost:15432/postgres}
     username: ${DB_USERNAME:gpadmin}
     password: ${DB_PASSWORD:VMware1!}
     hikari:
