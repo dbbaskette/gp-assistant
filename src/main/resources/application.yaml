@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: gp-assistant
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15432/gpdb}
+    username: ${DB_USERNAME:gpadmin}
+    password: ${DB_PASSWORD:VMware1!}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-5-nano
+          temperature: 1
+      embedding:
+        options:
+          model: text-embedding-3-small
+    mcp:
+      client:
+        # Set to false to disable MCP client when no servers are configured
+        enabled: ${MCP_CLIENT_ENABLED:false}
+        type: SYNC
+        request-timeout: 30s
+        annotation-scanner:
+          enabled: true
+        toolcallback:
+          enabled: true
+        # HTTP Streaming (SSE) connections - configure when you have MCP servers
+        sse:
+          connections:
+            # Example configuration (uncomment and configure when ready):
+            # schema:
+            #   url: ${MCP_SCHEMA_SERVER_URL:https://your-schema-server}
+            # query:
+            #   url: ${MCP_QUERY_SERVER_URL:https://your-query-server}
+
+# Flyway configuration
+flyway:
+  enabled: true
+
+# Application-specific configuration
+app:
+  docs:
+    # URL of the Greenplum documentation PDF to ingest
+    pdf-url: https://techdocs.broadcom.com/content/dam/broadcom/techdocs/us/en/pdf/vmware-tanzu/data-solutions/tanzu-greenplum/7/greenplum-database/greenplum-database.pdf
+    # Enable automatic ingestion on startup (default: true)
+    ingest-on-startup: ${DOCS_INGEST_ON_STARTUP:true}
+  rag:
+    # Maximum number of relevant documents to retrieve
+    top-k: ${RAG_TOP_K:5}
+    # Similarity threshold (0.0 to 1.0)
+    similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.7}
+
+# Actuator configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.example.gpassistant: DEBUG
+    org.springframework.ai: DEBUG
+    org.flywaydb: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"

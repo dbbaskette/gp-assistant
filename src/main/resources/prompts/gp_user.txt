@@ -1,0 +1,27 @@
+User Question:
+{{USER_QUESTION}}
+
+Target Version & Context:
+- Connected Database: {{CONNECTED_VERSION}}
+- Target GP Version: {{TARGET_GP_VERSION}}        # e.g., "7.0"
+- Compatible Baselines: {{COMPATIBLE_BASELINES}}  # e.g., ["6.x","7.x"]
+- Assume Version If Unspecified: {{DEFAULT_ASSUME_VERSION}}  # e.g., "7.0"
+
+Resources Provided by the Application:
+{{RESOURCES}}
+# Examples of what may appear here:
+# - Database schema details: relations, columns, types, distribution keys, partitioning, indexes
+# - Document excerpts: passages from official Greenplum docs (with page numbers)
+# - Other contextual hints the system provides
+
+Instructions:
+- Use your internal knowledge only if it is compatible with {{TARGET_GP_VERSION}} and not contradicted by the provided resources.
+- Use the provided resources whenever they help you answer accurately and safely.
+- Never invent table or column names; only use those supplied by the user or the resources.
+- Return the answer following the Response Contract below.
+
+Response Contract:
+1. Direct Answer (2–5 sentences).  
+2. SQL (if requested or helpful) in a single fenced block (```sql … ```).  
+3. Why this works (optional, ≤3 bullets).  
+4. Citations if you referenced provided resources, e.g. [Doc p.123].
