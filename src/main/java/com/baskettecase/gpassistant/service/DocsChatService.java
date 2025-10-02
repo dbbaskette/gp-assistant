@@ -3,8 +3,8 @@ package com.baskettecase.gpassistant.service;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -17,16 +17,26 @@ import com.baskettecase.gpassistant.PromptLoader;
 
 import jakarta.annotation.PostConstruct;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class DocsChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocsChatService.class);
 
     private final ChatClient chatClient;
     private final QuestionAnswerAdvisor qaAdvisor;
     private final ChatMemory chatMemory;
     private final GreenplumVersionService versionService;
     private final MeterRegistry meterRegistry;
+
+    public DocsChatService(ChatClient chatClient, QuestionAnswerAdvisor qaAdvisor,
+                          ChatMemory chatMemory, GreenplumVersionService versionService,
+                          MeterRegistry meterRegistry) {
+        this.chatClient = chatClient;
+        this.qaAdvisor = qaAdvisor;
+        this.chatMemory = chatMemory;
+        this.versionService = versionService;
+        this.meterRegistry = meterRegistry;
+    }
     
     // MCP Tool Provider - will be null if MCP is not enabled
     // TODO: Uncomment and use when MCP servers are configured

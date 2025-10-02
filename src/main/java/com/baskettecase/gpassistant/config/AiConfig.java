@@ -1,7 +1,8 @@
 package com.baskettecase.gpassistant.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
@@ -18,9 +19,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@Slf4j
 @Configuration
 public class AiConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
 
     @Value("${app.rag.top-k:5}")
     private int ragTopK;
@@ -60,9 +62,18 @@ public class AiConfig {
     }
 
     @Bean
-    public ChatClient chatClient(ChatClient.Builder builder) {
+    public ChatClient chatClient(ChatClient.Builder builder,
+                                @org.springframework.beans.factory.annotation.Autowired(required = false)
+                                org.springframework.ai.tool.ToolCallbackProvider toolCallbackProvider) {
         log.info("Configuring ChatClient");
-        return builder.build();
+
+        if (toolCallbackProvider != null) {
+            log.info("✅ MCP tools available - integrating into ChatClient");
+            return builder.defaultToolCallbacks(toolCallbackProvider).build();
+        } else {
+            log.info("⚠️  No MCP tools available - ChatClient configured without tools");
+            return builder.build();
+        }
     }
 
     @Bean

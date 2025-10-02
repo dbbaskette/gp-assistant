@@ -150,6 +150,10 @@ body {
     animation: float-in 0.45s ease;
 }
 
+.message--user {
+    flex-direction: row-reverse;
+}
+
 @keyframes float-in {
     from {opacity: 0; transform: translateY(12px);} 
     to {opacity: 1; transform: none;} 
@@ -181,7 +185,7 @@ body {
 }
 
 .message--user .message__bubble {
-    margin-left: auto;
+    margin-left: 0;
     background: var(--user-bg);
 }
 
@@ -403,4 +407,57 @@ body {
     .composer__label {
         margin-right: 1rem;
     }
+}
+
+/* Status Panel */
+.status-panel {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid hsla(200, 100%, 75%, 0.15);
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.status-icon {
+    font-size: 1rem;
+    filter: grayscale(0.3);
+}
+
+.status-label {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.status-value {
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.4rem;
+    background: hsla(220, 15%, 20%, 0.5);
+    border: 1px solid hsla(200, 100%, 75%, 0.15);
+}
+
+.status-value.status-healthy {
+    color: var(--accent-tertiary);
+    background: hsla(160, 80%, 65%, 0.15);
+    border-color: hsla(160, 80%, 65%, 0.3);
+}
+
+.status-value.status-error {
+    color: #ff6b9d;
+    background: hsla(340, 100%, 70%, 0.15);
+    border-color: hsla(340, 100%, 70%, 0.3);
+}
+
+.status-value.status-disabled {
+    color: #888;
+    background: hsla(0, 0%, 30%, 0.15);
+    border-color: hsla(0, 0%, 50%, 0.2);
 }

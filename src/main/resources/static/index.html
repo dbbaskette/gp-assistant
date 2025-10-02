@@ -5,6 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenplum AI Assistant</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🤖</text></svg>">
     <link rel="stylesheet" href="/assets/css/chat.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,6 +27,18 @@
                     <span id="model-mode">Detecting model…</span>
                 </div>
                 <div class="meta-line" id="endpoint-meta"></div>
+                <div class="status-panel">
+                    <div class="status-item" id="db-status">
+                        <span class="status-icon" title="Database">💾</span>
+                        <span class="status-label">DB:</span>
+                        <span class="status-value">checking...</span>
+                    </div>
+                    <div class="status-item" id="mcp-status">
+                        <span class="status-icon" title="MCP Server">🔌</span>
+                        <span class="status-label">MCP:</span>
+                        <span class="status-value">checking...</span>
+                    </div>
+                </div>
             </div>
         </header>
 

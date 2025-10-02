@@ -15,39 +15,32 @@ spring:
       max-attempts: 1
       backoff:
         initial-interval: 1000
-        multiplier: 2
-        max-interval: 10000
+    # OpenAI configuration - defaults are set by Application.java based on presence of OPENAI_API_KEY
+    # Local models (default): http://127.0.0.1:1234
+    # OpenAI models: requires OPENAI_API_KEY environment variable
     openai:
-      base-url: ${OPENAI_BASE_URL:${LOCAL_MODEL_BASE_URL:http://127.0.0.1:1234}}
-      api-key: ${OPENAI_API_KEY:local-key}
-      chat:
-        options:
-          model: ${OPENAI_CHAT_MODEL:${LOCAL_CHAT_MODEL:local-chat-model}}
-          temperature: ${OPENAI_CHAT_TEMPERATURE:0.8}
       embedding:
-        base-url: ${OPENAI_EMBEDDING_BASE_URL:${LOCAL_MODEL_BASE_URL:http://127.0.0.1:1234}}
-        api-key: ${OPENAI_EMBEDDING_API_KEY:${OPENAI_API_KEY:local-key}}
         options:
-          model: ${OPENAI_EMBEDDING_MODEL:${LOCAL_EMBEDDING_MODEL:text-embedding-nomic-embed-text-v2}}
           dimensions: 768
     mcp:
       client:
-        # Set to false to disable MCP client when no servers are configured
-        enabled: ${MCP_CLIENT_ENABLED:false}
+        # MCP Client configuration
+        # Set SPRING_AI_MCP_CLIENT_ENABLED=true in environment to enable MCP tools
+        # App will start successfully even if servers are offline
+        # Automatic retry with exponential backoff will attempt reconnection
+        enabled: ${SPRING_AI_MCP_CLIENT_ENABLED:false}
         type: SYNC
         request-timeout: 30s
         annotation-scanner:
           enabled: true
         toolcallback:
+          # Enable MCP tool integration
           enabled: true
-        # HTTP Streaming (SSE) connections - configure when you have MCP servers
-        sse:
-          connections:
-            # Example configuration (uncomment and configure when ready):
-            # schema:
-            #   url: ${MCP_SCHEMA_SERVER_URL:https://your-schema-server}
-            # query:
-            #   url: ${MCP_QUERY_SERVER_URL:https://your-query-server}
+        # Streamable HTTP transport - supports multiple server connections
+        # Note: Connections are managed dynamically by DynamicMcpClientManager
+        # to allow graceful startup when servers are offline
+        streamable-http:
+          connections: {}
 
 # Flyway configuration
 flyway:
@@ -89,8 +82,16 @@ management:
       prometheus:
         enabled: true
 
-# HTTP client configuration for Spring AI calls
-spring.mvc.async.request-timeout: 60000  # 60 seconds
+# Server configuration
+server:
+  # Tomcat timeout configurations (aligned with IMC-chatbot)
+  tomcat:
+    connection-timeout: 30000
+    keep-alive-timeout: 30000
+  # HTTP client configuration for Spring AI calls
+  mvc:
+    async:
+      request-timeout: 60000  # 60 seconds
 
 # RestClient configuration
 spring.http.client.connect-timeout: 10s

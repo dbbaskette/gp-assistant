@@ -169,8 +169,54 @@ chatInput.addEventListener('input', () => {
   chatInput.style.height = `${Math.min(chatInput.scrollHeight, 170)}px`;
 });
 
+// Status panel management
+async function updateStatus() {
+  try {
+    const response = await fetch('/api/status');
+    const status = await response.json();
+
+    // Update database status
+    const dbStatusEl = document.getElementById('db-status');
+    const dbValueEl = dbStatusEl.querySelector('.status-value');
+    if (status.database?.healthy) {
+      dbValueEl.textContent = 'connected';
+      dbValueEl.className = 'status-value status-healthy';
+      dbStatusEl.title = `Database: ${status.database.version || 'connected'}`;
+    } else {
+      dbValueEl.textContent = 'error';
+      dbValueEl.className = 'status-value status-error';
+      dbStatusEl.title = `Database error: ${status.database?.error || 'unknown'}`;
+    }
+
+    // Update MCP status
+    const mcpStatusEl = document.getElementById('mcp-status');
+    const mcpValueEl = mcpStatusEl.querySelector('.status-value');
+    if (!status.mcp?.enabled) {
+      mcpValueEl.textContent = 'disabled';
+      mcpValueEl.className = 'status-value status-disabled';
+      mcpStatusEl.title = 'MCP client is disabled';
+    } else if (status.mcp?.healthy) {
+      const toolCount = status.mcp.toolCount || 0;
+      mcpValueEl.textContent = `${toolCount} tools`;
+      mcpValueEl.className = 'status-value status-healthy';
+      mcpStatusEl.title = `MCP: ${status.mcp.message || 'connected'}`;
+    } else {
+      mcpValueEl.textContent = 'disconnected';
+      mcpValueEl.className = 'status-value status-error';
+      mcpStatusEl.title = `MCP: ${status.mcp?.message || 'not connected'}`;
+    }
+  } catch (error) {
+    console.error('Failed to fetch status:', error);
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   await loadConfig();
+  await updateStatus();
+
+  // Update status periodically
+  setInterval(updateStatus, 30000); // Every 30 seconds
+
   appendMessage({
     role: 'assistant',
     content: 'Hello! I am ready to help with Greenplum, PostgreSQL, and the underlying RAG knowledge base. Ask me anything about setup, operations, or tuning.'

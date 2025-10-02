@@ -3,8 +3,8 @@ package com.baskettecase.gpassistant;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
@@ -18,24 +18,28 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class DocsIngestor {
+
+    private static final Logger log = LoggerFactory.getLogger(DocsIngestor.class);
 
     private final VectorStore vectorStore;
     private final MeterRegistry meterRegistry;
+
+    public DocsIngestor(VectorStore vectorStore, MeterRegistry meterRegistry) {
+        this.vectorStore = vectorStore;
+        this.meterRegistry = meterRegistry;
+    }
 
     @Value("${app.docs.pdf-url}")
     private String pdfUrl;
@@ -253,7 +257,7 @@ public class DocsIngestor {
      */
     private Path downloadPdf(String url) throws IOException {
         Path tmp = Files.createTempFile("greenplum-db", ".pdf");
-        try (var in = new URL(url).openStream()) {
+        try (var in = URI.create(url).toURL().openStream()) {
             long bytesDownloaded = Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING);
             log.debug("Downloaded {} bytes from {}", bytesDownloaded, url);
             return tmp;

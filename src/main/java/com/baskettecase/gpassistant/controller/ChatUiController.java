@@ -3,9 +3,8 @@ package com.baskettecase.gpassistant.controller;
 import com.baskettecase.gpassistant.service.DocsChatService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,17 +17,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/chat")
-@RequiredArgsConstructor
 @Validated
 public class ChatUiController {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatUiController.class);
+
     private final DocsChatService chatService;
     private final Environment environment;
+
+    public ChatUiController(DocsChatService chatService, Environment environment) {
+        this.chatService = chatService;
+        this.environment = environment;
+    }
 
     @PostMapping(path = "/message", consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -95,7 +100,6 @@ public class ChatUiController {
         return text.length() > 120 ? text.substring(0, 117) + "…" : text;
     }
 
-    @Data
     public static class ChatMessageRequest {
         @NotBlank(message = "Question is required")
         private String question;
@@ -103,6 +107,76 @@ public class ChatUiController {
         private String targetVersion;
         private String[] compatibleBaselines;
         private String defaultAssumeVersion;
+
+        public String getQuestion() {
+            return question;
+        }
+
+        public void setQuestion(String question) {
+            this.question = question;
+        }
+
+        public String getConversationId() {
+            return conversationId;
+        }
+
+        public void setConversationId(String conversationId) {
+            this.conversationId = conversationId;
+        }
+
+        public String getTargetVersion() {
+            return targetVersion;
+        }
+
+        public void setTargetVersion(String targetVersion) {
+            this.targetVersion = targetVersion;
+        }
+
+        public String[] getCompatibleBaselines() {
+            return compatibleBaselines;
+        }
+
+        public void setCompatibleBaselines(String[] compatibleBaselines) {
+            this.compatibleBaselines = compatibleBaselines;
+        }
+
+        public String getDefaultAssumeVersion() {
+            return defaultAssumeVersion;
+        }
+
+        public void setDefaultAssumeVersion(String defaultAssumeVersion) {
+            this.defaultAssumeVersion = defaultAssumeVersion;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ChatMessageRequest that = (ChatMessageRequest) o;
+            return Objects.equals(question, that.question) &&
+                    Objects.equals(conversationId, that.conversationId) &&
+                    Objects.equals(targetVersion, that.targetVersion) &&
+                    java.util.Arrays.equals(compatibleBaselines, that.compatibleBaselines) &&
+                    Objects.equals(defaultAssumeVersion, that.defaultAssumeVersion);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Objects.hash(question, conversationId, targetVersion, defaultAssumeVersion);
+            result = 31 * result + java.util.Arrays.hashCode(compatibleBaselines);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "ChatMessageRequest{" +
+                    "question='" + question + '\'' +
+                    ", conversationId='" + conversationId + '\'' +
+                    ", targetVersion='" + targetVersion + '\'' +
+                    ", compatibleBaselines=" + java.util.Arrays.toString(compatibleBaselines) +
+                    ", defaultAssumeVersion='" + defaultAssumeVersion + '\'' +
+                    '}';
+        }
     }
 
     private record ChatMessageResponse(String answer, String conversationId, String respondedAt, String model) {}
