@@ -2,7 +2,9 @@ package com.baskettecase.gpassistant.service;
 
 import com.baskettecase.gpassistant.config.McpConnectionProperties;
 import com.baskettecase.gpassistant.domain.McpConnectionStatus;
+import com.baskettecase.gpassistant.domain.McpServerEntity;
 import com.baskettecase.gpassistant.exception.McpConnectionException;
+import com.baskettecase.gpassistant.repository.McpServerRepository;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
@@ -15,6 +17,11 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
+import java.net.Authenticator;
+import java.net.CookieHandler;
+import java.net.ProxySelector;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,17 +29,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Manages dynamic MCP client connections with retry logic.
- * Loads connections from application.yaml and handles automatic retry on failure.
+ * Loads connections from database (mcp_servers table) and handles automatic retry on failure.
+ * Connects only to the active MCP server from the database.
  */
 @Component
-@ConditionalOnProperty(name = "spring.ai.mcp.client.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "spring.ai.mcp.client.use-dynamic-manager", havingValue = "true")
 public class DynamicMcpClientManager {
 
     private static final Logger log = LoggerFactory.getLogger(DynamicMcpClientManager.class);
@@ -42,108 +52,148 @@ public class DynamicMcpClientManager {
     private static final Duration MAX_RETRY_DELAY = Duration.ofMinutes(5);
 
     private final McpClientCommonProperties commonProperties;
+    private final McpServerRepository mcpServerRepository;
+    private final EncryptionService encryptionService;
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(2);
 
     // In-memory storage
     private final Map<String, McpSyncClient> activeClients = new ConcurrentHashMap<>();
     private final Map<String, McpConnectionStatus> connectionStatuses = new ConcurrentHashMap<>();
 
-    public DynamicMcpClientManager(McpClientCommonProperties commonProperties) {
+    public DynamicMcpClientManager(
+            McpClientCommonProperties commonProperties,
+            McpServerRepository mcpServerRepository,
+            EncryptionService encryptionService) {
         this.commonProperties = commonProperties;
-        log.info("🔧 DynamicMcpClientManager initialized");
+        this.mcpServerRepository = mcpServerRepository;
+        this.encryptionService = encryptionService;
+        log.info("🔧 DynamicMcpClientManager initialized with database-backed configuration");
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void initializeConnections() {
-        log.info("=== Initializing MCP Connections ===");
+        log.info("=== Initializing MCP Connections from Database ===");
 
-        // Create connections from environment variables
-        Map<String, McpConnectionProperties.ConnectionConfig> connections = new ConcurrentHashMap<>();
+        // Load active MCP server from database
+        Optional<McpServerEntity> activeServerOpt = mcpServerRepository.findActive();
 
-        // Default gp-schema connection
-        String gpSchemaUrl = System.getenv().getOrDefault("MCP_SCHEMA_SERVER_URL", "http://localhost:8082");
-        String gpSchemaEndpoint = System.getenv().getOrDefault("MCP_SCHEMA_SERVER_ENDPOINT", "/mcp");
-        String gpSchemaEnabled = System.getenv().getOrDefault("MCP_SCHEMA_SERVER_ENABLED", "true");
-
-        if ("true".equalsIgnoreCase(gpSchemaEnabled)) {
-            McpConnectionProperties.ConnectionConfig config = new McpConnectionProperties.ConnectionConfig();
-            config.setUrl(gpSchemaUrl);
-            config.setEndpoint(gpSchemaEndpoint);
-            config.setEnabled(true);
-            connections.put("gp-schema", config);
-            log.info("Configured MCP connection 'gp-schema' at {}{}", gpSchemaUrl, gpSchemaEndpoint);
-        }
-
-        if (connections.isEmpty()) {
-            log.warn("⚠️  No MCP connections configured");
+        if (activeServerOpt.isEmpty()) {
+            log.warn("⚠️  No active MCP server configured in database");
             log.info("✅ Application running without MCP servers");
+            log.info("💡 Configure MCP servers via Settings UI at /");
             return;
         }
 
-        log.info("Found {} configured MCP connection(s)", connections.size());
+        McpServerEntity server = activeServerOpt.get();
+        log.info("Found active MCP server '{}' at {}", server.getName(), server.getUrl());
 
-        connections.forEach((name, config) -> {
-            McpConnectionStatus status = new McpConnectionStatus(
-                    name,
-                    config.getUrl(),
-                    config.getEndpoint(),
-                    config.isEnabled()
-            );
-            connectionStatuses.put(name, status);
+        // Create connection status
+        McpConnectionStatus status = new McpConnectionStatus(
+                server.getId().toString(),
+                server.getUrl(),
+                "/mcp",  // Standard endpoint
+                true
+        );
+        connectionStatuses.put(server.getId().toString(), status);
 
-            if (config.isEnabled()) {
-                attemptConnection(name, config);
-            } else {
-                status.markDisabled();
-                log.info("❌ Connection '{}' is disabled in configuration", name);
-            }
-        });
+        // Attempt to connect
+        attemptConnection(server);
 
         log.info("=== MCP Connection Initialization Complete ===");
     }
 
-    private void attemptConnection(String name, McpConnectionProperties.ConnectionConfig config) {
+    /**
+     * Attempt to connect to an MCP server from database entity.
+     */
+    private void attemptConnection(McpServerEntity server) {
+        String serverId = server.getId().toString();
         try {
-            log.info("🔄 Attempting to connect to MCP server '{}' at {}{}", name, config.getUrl(), config.getEndpoint());
+            log.info("🔄 Attempting to connect to MCP server '{}' at {}", server.getName(), server.getUrl());
 
-            McpSyncClient client = buildClient(name, config);
-            activeClients.put(name, client);
+            McpSyncClient client = buildClient(server);
+            activeClients.put(serverId, client);
 
-            McpConnectionStatus status = connectionStatuses.get(name);
+            McpConnectionStatus status = connectionStatuses.get(serverId);
             status.markSuccess();
 
             // Discover and update tools
-            updateToolInformation(name, client, status);
+            updateToolInformation(serverId, client, status);
 
-            log.info("✅ Successfully connected to MCP server '{}' ({} tools)", name, status.getToolCount());
+            // Update database status
+            mcpServerRepository.updateStatus(
+                    server.getId(),
+                    McpServerEntity.Status.CONNECTED.getValue(),
+                    "Connected successfully",
+                    status.getToolCount()
+            );
+            mcpServerRepository.updateLastConnectedAt(server.getId());
+
+            log.info("✅ Successfully connected to MCP server '{}' ({} tools)", server.getName(), status.getToolCount());
 
         } catch (Exception e) {
-            log.warn("❌ Failed to connect to MCP server '{}': {}", name, e.getMessage());
+            log.warn("❌ Failed to connect to MCP server '{}': {}", server.getName(), e.getMessage());
 
-            McpConnectionStatus status = connectionStatuses.get(name);
+            McpConnectionStatus status = connectionStatuses.get(serverId);
             status.markFailure(e.getMessage());
+
+            // Update database status
+            mcpServerRepository.updateStatus(
+                    server.getId(),
+                    McpServerEntity.Status.ERROR.getValue(),
+                    e.getMessage(),
+                    0
+            );
 
             // Check if retryable
             if (isRetryableException(e)) {
-                scheduleRetry(name, config);
+                scheduleRetry(server);
             } else {
-                log.error("🚫 Non-retryable error for '{}': {}", name, e.getMessage());
+                log.error("🚫 Non-retryable error for '{}': {}", server.getName(), e.getMessage());
             }
         }
     }
 
-    private McpSyncClient buildClient(String name, McpConnectionProperties.ConnectionConfig config) {
-        String baseUrl = config.getUrl();
-        String endpoint = config.getEndpoint() != null ? config.getEndpoint() : "/mcp";
+    /**
+     * Build MCP client from database entity with X-API-Key authentication.
+     */
+    private McpSyncClient buildClient(McpServerEntity server) {
+        String baseUrl = server.getUrl();
+        String endpoint = "/mcp";  // Standard MCP endpoint
+
+        // Decrypt API key
+        String apiKey = encryptionService.decrypt(server.getApiKeyEncrypted());
+        log.debug("Building client for server '{}' with API key length: {}", server.getName(), apiKey.length());
+
+        // Create HttpClient wrapped with X-API-Key header support
+        HttpClient baseClient = HttpClient.newBuilder()
+                .connectTimeout(commonProperties.getRequestTimeout())
+                .build();
+
+        final HttpClient authorizingClient = new AuthorizingHttpClient(baseClient, apiKey);
+
+        // Create a minimal builder that returns our pre-built authorizing client
+        HttpClient.Builder wrappingBuilder = new HttpClient.Builder() {
+            public HttpClient build() { return authorizingClient; }
+            public HttpClient.Builder cookieHandler(CookieHandler h) { return this; }
+            public HttpClient.Builder connectTimeout(Duration d) { return this; }
+            public HttpClient.Builder sslContext(SSLContext c) { return this; }
+            public HttpClient.Builder sslParameters(SSLParameters p) { return this; }
+            public HttpClient.Builder executor(Executor e) { return this; }
+            public HttpClient.Builder followRedirects(HttpClient.Redirect r) { return this; }
+            public HttpClient.Builder version(HttpClient.Version v) { return this; }
+            public HttpClient.Builder priority(int pri) { return this; }
+            public HttpClient.Builder proxy(ProxySelector ps) { return this; }
+            public HttpClient.Builder authenticator(Authenticator a) { return this; }
+        };
 
         HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport
                 .builder(baseUrl)
                 .endpoint(endpoint)
-                .clientBuilder(HttpClient.newBuilder())
+                .clientBuilder(wrappingBuilder)
                 .build();
 
         McpSchema.Implementation clientInfo = new McpSchema.Implementation(
-                commonProperties.getName() + " - " + name,
+                commonProperties.getName() + " - " + server.getName(),
                 commonProperties.getVersion()
         );
 
@@ -154,6 +204,8 @@ public class DynamicMcpClientManager {
 
         // Initialize the client
         client.initialize();
+
+        log.info("✅ MCP client built and initialized for server '{}'", server.getName());
 
         return client;
     }
@@ -196,11 +248,18 @@ public class DynamicMcpClientManager {
                 ex instanceof java.io.IOException;
     }
 
-    private void scheduleRetry(String name, McpConnectionProperties.ConnectionConfig config) {
-        McpConnectionStatus status = connectionStatuses.get(name);
+    private void scheduleRetry(McpServerEntity server) {
+        String serverId = server.getId().toString();
+        McpConnectionStatus status = connectionStatuses.get(serverId);
 
         if (status.getRetryCount() >= MAX_RETRY_ATTEMPTS) {
-            log.error("🚫 Max retry attempts ({}) exceeded for '{}'. Giving up.", MAX_RETRY_ATTEMPTS, name);
+            log.error("🚫 Max retry attempts ({}) exceeded for '{}'. Giving up.", MAX_RETRY_ATTEMPTS, server.getName());
+            mcpServerRepository.updateStatus(
+                    server.getId(),
+                    McpServerEntity.Status.ERROR.getValue(),
+                    "Max retry attempts exceeded",
+                    0
+            );
             return;
         }
 
@@ -209,11 +268,11 @@ public class DynamicMcpClientManager {
         status.setNextRetryAt(Instant.now().plus(delay));
 
         log.info("⏱️  Scheduling retry {} for '{}' in {} seconds",
-                status.getRetryCount(), name, delay.getSeconds());
+                status.getRetryCount(), server.getName(), delay.getSeconds());
 
         retryExecutor.schedule(() -> {
-            log.info("🔄 Executing retry {} for '{}'", status.getRetryCount(), name);
-            attemptConnection(name, config);
+            log.info("🔄 Executing retry {} for '{}'", status.getRetryCount(), server.getName());
+            attemptConnection(server);
         }, delay.getSeconds(), TimeUnit.SECONDS);
     }
 
@@ -241,75 +300,58 @@ public class DynamicMcpClientManager {
     }
 
     /**
-     * Get connection status by name.
+     * Get connection status by server ID.
      */
-    public McpConnectionStatus getStatus(String name) {
-        return connectionStatuses.get(name);
+    public McpConnectionStatus getStatus(String serverId) {
+        return connectionStatuses.get(serverId);
     }
 
     /**
-     * Manually retry a failed connection.
+     * Manually retry the active MCP server connection.
      */
-    public void retryConnection(String name) {
-        McpConnectionStatus status = connectionStatuses.get(name);
-        if (status == null) {
-            throw new McpConnectionException("Connection '" + name + "' not found");
+    public void retryActiveConnection() {
+        Optional<McpServerEntity> activeServerOpt = mcpServerRepository.findActive();
+        if (activeServerOpt.isEmpty()) {
+            throw new McpConnectionException("No active MCP server configured");
         }
 
-        // Reconstruct config from status
-        McpConnectionProperties.ConnectionConfig config = new McpConnectionProperties.ConnectionConfig();
-        config.setUrl(status.getUrl());
-        config.setEndpoint(status.getEndpoint());
-        config.setEnabled(status.isEnabled());
+        McpServerEntity server = activeServerOpt.get();
+        String serverId = server.getId().toString();
+        McpConnectionStatus status = connectionStatuses.get(serverId);
 
-        log.info("🔄 Manual retry requested for '{}'", name);
+        if (status == null) {
+            // Create new status if missing
+            status = new McpConnectionStatus(
+                    serverId,
+                    server.getUrl(),
+                    "/mcp",
+                    true
+            );
+            connectionStatuses.put(serverId, status);
+        }
+
+        log.info("🔄 Manual retry requested for '{}'", server.getName());
         status.setRetryCount(0); // Reset retry count for manual retry
-        attemptConnection(name, config);
+        attemptConnection(server);
     }
 
     /**
-     * Disable a connection.
+     * Reconnect to the active MCP server (called when active server changes).
      */
-    public void disableConnection(String name) {
-        McpConnectionStatus status = connectionStatuses.get(name);
-        if (status == null) {
-            throw new McpConnectionException("Connection '" + name + "' not found");
-        }
-
-        log.info("❌ Disabling connection '{}'", name);
-
-        // Remove active client
-        McpSyncClient client = activeClients.remove(name);
-        if (client != null) {
+    public void reconnectActiveServer() {
+        // Close all existing connections
+        activeClients.values().forEach(client -> {
             try {
                 client.close();
             } catch (Exception e) {
-                log.warn("Error closing client for '{}': {}", name, e.getMessage());
+                log.warn("Error closing MCP client: {}", e.getMessage());
             }
-        }
+        });
+        activeClients.clear();
+        connectionStatuses.clear();
 
-        status.markDisabled();
-    }
-
-    /**
-     * Re-enable a disabled connection.
-     */
-    public void enableConnection(String name) {
-        McpConnectionStatus status = connectionStatuses.get(name);
-        if (status == null) {
-            throw new McpConnectionException("Connection '" + name + "' not found");
-        }
-
-        // Reconstruct config from status
-        McpConnectionProperties.ConnectionConfig config = new McpConnectionProperties.ConnectionConfig();
-        config.setUrl(status.getUrl());
-        config.setEndpoint(status.getEndpoint());
-        config.setEnabled(true);
-
-        log.info("✅ Enabling connection '{}'", name);
-        status.setEnabled(true);
-        status.setRetryCount(0);
-        attemptConnection(name, config);
+        // Initialize connections from database
+        initializeConnections();
     }
 
     /**

@@ -39,7 +39,8 @@ public class Application {
                     envOrDefault("LOCAL_CHAT_MODEL", "local-chat-model"));
             setIfMissing("spring.ai.openai.embedding.options.model",
                     envOrDefault("LOCAL_EMBEDDING_MODEL", "local-embedding-model"));
-            setIfMissing("spring.ai.openai.chat.options.temperature", "0.8");
+            setIfMissing("spring.ai.openai.chat.options.temperature",
+                    envOrDefault("OPENAI_CHAT_TEMPERATURE", "1.0"));
             log.info("Using local models at {}", localBaseUrl);
         }
     }

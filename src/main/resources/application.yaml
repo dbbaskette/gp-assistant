@@ -22,6 +22,9 @@ spring:
       embedding:
         options:
           dimensions: 768
+      chat:
+        options:
+          temperature: ${OPENAI_CHAT_TEMPERATURE:1}
     mcp:
       client:
         # MCP Client configuration
@@ -31,16 +34,20 @@ spring:
         enabled: ${SPRING_AI_MCP_CLIENT_ENABLED:false}
         type: SYNC
         request-timeout: 30s
+        # Use database-backed dynamic manager for MCP server configuration
+        use-dynamic-manager: ${SPRING_AI_MCP_CLIENT_USE_DYNAMIC_MANAGER:true}
         annotation-scanner:
           enabled: true
         toolcallback:
           # Enable MCP tool integration
           enabled: true
-        # Streamable HTTP transport - supports multiple server connections
-        # Note: Connections are managed dynamically by DynamicMcpClientManager
-        # to allow graceful startup when servers are offline
-        streamable-http:
-          connections: {}
+      # MCP Server connections - standard Spring AI format
+      servers:
+        gp-schema:
+          url: ${GP_MCP_SERVER_URL:http://localhost:8082}/mcp
+          headers:
+            Authorization: Bearer ${GP_MCP_SERVER_API_KEY:}
+
 
 # Flyway configuration
 flyway:
@@ -65,6 +72,11 @@ app:
     top-k: ${RAG_TOP_K:5}
     # Similarity threshold (0.0 to 1.0)
     similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.7}
+  security:
+    # Encryption key for securing MCP server API keys in database
+    # Generate with: openssl rand -base64 32
+    # REQUIRED when using MCP server configuration UI
+    encryption-key: ${APP_SECURITY_ENCRYPTION_KEY:}
 
 # Actuator configuration
 management:

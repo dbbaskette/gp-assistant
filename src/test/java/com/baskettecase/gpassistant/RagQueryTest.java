@@ -63,7 +63,9 @@ public class RagQueryTest {
                 "7.0",              // targetVersion
                 new String[]{"7.x"}, // compatibleBaselines
                 "7.0",              // defaultAssumeVersion
-                conversationId
+                conversationId,
+                null,               // database
+                null                // schema
         );
 
         // Then: The response should mention distributed tables
@@ -94,7 +96,9 @@ public class RagQueryTest {
                 "7.0",
                 new String[]{"7.x"},
                 "7.0",
-                conversationId
+                conversationId,
+                null,
+                null
         );
 
         // Then: The response should mention partitioning concepts
@@ -120,10 +124,10 @@ public class RagQueryTest {
 
         // When: We ask a follow-up question
         String firstQuestion = "What is GPORCA?";
-        String firstResponse = chatService.ask(firstQuestion, "7.0", new String[]{"7.x"}, "7.0", conversationId);
+        String firstResponse = chatService.ask(firstQuestion, "7.0", new String[]{"7.x"}, "7.0", conversationId, null, null);
 
         String followUpQuestion = "How does it improve query performance?";
-        String followUpResponse = chatService.ask(followUpQuestion, "7.0", new String[]{"7.x"}, "7.0", conversationId);
+        String followUpResponse = chatService.ask(followUpQuestion, "7.0", new String[]{"7.x"}, "7.0", conversationId, null, null);
 
         // Then: Both responses should be relevant
         assertThat(firstResponse)

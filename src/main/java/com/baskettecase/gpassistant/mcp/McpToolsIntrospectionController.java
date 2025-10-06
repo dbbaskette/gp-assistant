@@ -33,7 +33,7 @@ public class McpToolsIntrospectionController {
 
     public McpToolsIntrospectionController(
             @Autowired(required = false) ToolCallbackProvider toolCallbackProvider,
-            DynamicMcpClientManager clientManager) {
+            @Autowired(required = false) DynamicMcpClientManager clientManager) {
         this.toolCallbackProvider = toolCallbackProvider;
         this.clientManager = clientManager;
     }
@@ -155,6 +155,15 @@ public class McpToolsIntrospectionController {
         response.put("mcpEnabled", true);
         response.put("clientType", mcpType);
 
+        if (clientManager == null) {
+            response.put("connections", Collections.emptyList());
+            response.put("totalConnections", 0);
+            response.put("activeConnections", 0);
+            response.put("totalTools", 0);
+            response.put("message", "Using standard Spring AI MCP configuration (not DynamicMcpClientManager)");
+            return response;
+        }
+
         // Get all connection statuses
         Collection<McpConnectionStatus> statuses = clientManager.getAllStatuses();
         List<Map<String, Object>> connections = new ArrayList<>();
@@ -194,17 +203,26 @@ public class McpToolsIntrospectionController {
     }
 
     /**
-     * Manually retry a failed connection
+     * Manually retry the active MCP server connection.
+     * @deprecated Use /api/mcp/servers/{id}/test instead
      */
+    @Deprecated
     @PostMapping("/connections/{name}/retry")
     public ResponseEntity<Map<String, Object>> retryConnection(@PathVariable String name) {
-        log.info("Manual retry requested for connection '{}'", name);
+        log.warn("Deprecated endpoint /mcp/introspection/connections/{}/retry called. Use /api/mcp/servers/{{id}}/test instead", name);
+
+        if (clientManager == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "DynamicMcpClientManager not available. Use Settings UI to manage MCP servers."
+            ));
+        }
 
         try {
-            clientManager.retryConnection(name);
+            clientManager.retryActiveConnection();
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", "Retry initiated for connection '" + name + "'"
+                    "message", "Retry initiated for active MCP server"
             ));
         } catch (McpConnectionException e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -215,44 +233,28 @@ public class McpToolsIntrospectionController {
     }
 
     /**
-     * Disable a connection
+     * @deprecated MCP server connections are now managed via Settings UI at /api/mcp/servers
      */
+    @Deprecated
     @PostMapping("/connections/{name}/disable")
     public ResponseEntity<Map<String, Object>> disableConnection(@PathVariable String name) {
-        log.info("Disable requested for connection '{}'", name);
-
-        try {
-            clientManager.disableConnection(name);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Connection '" + name + "' disabled"
-            ));
-        } catch (McpConnectionException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()
-            ));
-        }
+        log.warn("Deprecated endpoint called. Use /api/mcp/servers/deactivate-all instead");
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "This endpoint is deprecated. Use Settings UI to manage MCP servers at /api/mcp/servers"
+        ));
     }
 
     /**
-     * Enable a connection
+     * @deprecated MCP server connections are now managed via Settings UI at /api/mcp/servers
      */
+    @Deprecated
     @PostMapping("/connections/{name}/enable")
     public ResponseEntity<Map<String, Object>> enableConnection(@PathVariable String name) {
-        log.info("Enable requested for connection '{}'", name);
-
-        try {
-            clientManager.enableConnection(name);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Connection '" + name + "' enabled and connecting"
-            ));
-        } catch (McpConnectionException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()
-            ));
-        }
+        log.warn("Deprecated endpoint called. Use /api/mcp/servers/{id}/activate instead");
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "This endpoint is deprecated. Use Settings UI to manage MCP servers at /api/mcp/servers"
+        ));
     }
 }

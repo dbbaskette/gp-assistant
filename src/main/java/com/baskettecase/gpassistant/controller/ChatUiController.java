@@ -54,10 +54,13 @@ public class ChatUiController {
                 ? request.getDefaultAssumeVersion()
                 : targetVersion;
 
-        log.info("Chat UI message: question='{}' conversation='{}' targetVersion='{}'", 
-                trimForLog(request.getQuestion()), conversationId, targetVersion);
+        String database = request.getDatabase();
+        String schema = request.getSchema();
 
-        String answer = chatService.ask(request.getQuestion(), targetVersion, baselines, assume, conversationId);
+        log.info("Chat UI message: question='{}' conversation='{}' targetVersion='{}' database='{}' schema='{}'",
+                trimForLog(request.getQuestion()), conversationId, targetVersion, database, schema);
+
+        String answer = chatService.ask(request.getQuestion(), targetVersion, baselines, assume, conversationId, database, schema);
         ChatMessageResponse response = new ChatMessageResponse(
                 answer,
                 conversationId,
@@ -107,6 +110,8 @@ public class ChatUiController {
         private String targetVersion;
         private String[] compatibleBaselines;
         private String defaultAssumeVersion;
+        private String database;
+        private String schema;
 
         public String getQuestion() {
             return question;
@@ -146,6 +151,22 @@ public class ChatUiController {
 
         public void setDefaultAssumeVersion(String defaultAssumeVersion) {
             this.defaultAssumeVersion = defaultAssumeVersion;
+        }
+
+        public String getDatabase() {
+            return database;
+        }
+
+        public void setDatabase(String database) {
+            this.database = database;
+        }
+
+        public String getSchema() {
+            return schema;
+        }
+
+        public void setSchema(String schema) {
+            this.schema = schema;
         }
 
         @Override

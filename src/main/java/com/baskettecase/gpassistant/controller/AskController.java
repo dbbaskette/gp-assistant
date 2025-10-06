@@ -38,7 +38,7 @@ public class AskController {
             String version = req.targetVersion != null ? req.targetVersion : "7.0";
             String conversationId = req.conversationId;
             
-            String response = chat.ask(req.question, version, baselines, assume, conversationId);
+            String response = chat.ask(req.question, version, baselines, assume, conversationId, null, null);
             
             log.debug("Successfully processed ask request for conversationId='{}'", conversationId);
             return ResponseEntity.ok(response);

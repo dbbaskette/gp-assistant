@@ -26,7 +26,7 @@ import java.util.List;
  */
 @Component
 @Primary
-@ConditionalOnProperty(name = "spring.ai.mcp.client.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "spring.ai.mcp.client.use-dynamic-manager", havingValue = "true")
 public class ResilientMcpToolCallbackConfig implements ToolCallbackProvider {
 
     private static final Logger log = LoggerFactory.getLogger(ResilientMcpToolCallbackConfig.class);
@@ -39,7 +39,9 @@ public class ResilientMcpToolCallbackConfig implements ToolCallbackProvider {
     // Cache to prevent duplicate tool registration
     private volatile ToolCallback[] cachedToolCallbacks = null;
     private volatile long lastCacheUpdate = 0;
-    private static final long CACHE_EXPIRY_MS = 30000; // 30 seconds
+    // Don't cache empty results for long - MCP server might still be starting
+    private static final long CACHE_EXPIRY_MS = 30000; // 30 seconds for non-empty
+    private static final long EMPTY_CACHE_EXPIRY_MS = 2000; // 2 seconds for empty - retry soon
 
     public ResilientMcpToolCallbackConfig(
             DynamicMcpClientManager clientManager,
@@ -51,15 +53,31 @@ public class ResilientMcpToolCallbackConfig implements ToolCallbackProvider {
         this.namePrefixProvider = namePrefixProvider;
         this.metaConverterProvider = metaConverterProvider;
         log.info("🔧 Initialized resilient MCP tool callback provider with DynamicMcpClientManager");
+
+        // Schedule eager tool discovery after brief delay to allow MCP connections to establish
+        new Thread(() -> {
+            try {
+                Thread.sleep(3000); // Wait 3 seconds for MCP server to connect
+                log.info("🔄 Running eager tool discovery check...");
+                getToolCallbacks(); // This will populate the cache
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
     }
 
     @Override
     public ToolCallback[] getToolCallbacks() {
-        // Check cache first
+        // Check cache first - use shorter expiry for empty cache to allow retry during startup
         long currentTime = System.currentTimeMillis();
-        if (cachedToolCallbacks != null && (currentTime - lastCacheUpdate) < CACHE_EXPIRY_MS) {
-            log.debug("🔧 Returning cached tool callbacks ({} tools)", cachedToolCallbacks.length);
-            return cachedToolCallbacks;
+        if (cachedToolCallbacks != null) {
+            long cacheExpiry = (cachedToolCallbacks.length == 0) ? EMPTY_CACHE_EXPIRY_MS : CACHE_EXPIRY_MS;
+            if ((currentTime - lastCacheUpdate) < cacheExpiry) {
+                log.debug("🔧 Returning cached tool callbacks ({} tools)", cachedToolCallbacks.length);
+                return cachedToolCallbacks;
+            } else if (cachedToolCallbacks.length == 0) {
+                log.info("🔄 Empty cache expired - retrying tool discovery");
+            }
         }
 
         // Get active clients from DynamicMcpClientManager

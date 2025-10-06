@@ -133,23 +133,10 @@ public class StatusController {
         }
 
         try {
-            String[] methodNames = {"getCallbacks", "getToolCallbacks", "getAllCallbacks"};
-
-            for (String methodName : methodNames) {
-                try {
-                    java.lang.reflect.Method method = toolCallbackProvider.getClass().getMethod(methodName);
-                    Object callbacks = method.invoke(toolCallbackProvider);
-
-                    if (callbacks instanceof java.util.Map) {
-                        return ((java.util.Map<?, ?>) callbacks).size();
-                    }
-
-                    if (callbacks instanceof java.util.Collection) {
-                        return ((java.util.Collection<?>) callbacks).size();
-                    }
-                } catch (NoSuchMethodException e) {
-                    // Try next method
-                }
+            // ToolCallbackProvider.getToolCallbacks() returns ToolCallback[]
+            org.springframework.ai.tool.ToolCallback[] callbacks = toolCallbackProvider.getToolCallbacks();
+            if (callbacks != null) {
+                return callbacks.length;
             }
         } catch (Exception e) {
             log.debug("Could not extract tool count", e);

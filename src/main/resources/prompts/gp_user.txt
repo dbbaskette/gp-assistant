@@ -3,6 +3,8 @@ User Question:
 
 Target Version & Context:
 - Connected Database: {{CONNECTED_VERSION}}
+- Current Database: {{DATABASE_NAME}}              # User-selected database context
+- Current Schema: {{SCHEMA_NAME}}                  # User-selected schema context
 - Target GP Version: {{TARGET_GP_VERSION}}        # e.g., "7.0"
 - Compatible Baselines: {{COMPATIBLE_BASELINES}}  # e.g., ["6.x","7.x"]
 - Assume Version If Unspecified: {{DEFAULT_ASSUME_VERSION}}  # e.g., "7.0"
@@ -18,6 +20,7 @@ Instructions:
 - Use your internal knowledge only if it is compatible with {{TARGET_GP_VERSION}} and not contradicted by the provided resources.
 - Use the provided resources whenever they help you answer accurately and safely.
 - Never invent table or column names; only use those supplied by the user or the resources.
+- If user mentions a table/schema name, verify it exists using tools before executing queries. Handle typos by finding similar names.
 - Return the answer following the Response Contract below.
 
 Response Contract:
