@@ -1,423 +1,256 @@
-# 🚀 Greenplum AI Assistant (Spring Boot + Spring AI + pgvector)
+# <div align="center" style="padding:32px 24px;border-radius:28px;background:linear-gradient(135deg,#0d0f1b,#1b1f33);border:1px solid rgba(94,207,255,0.35);box-shadow:0 25px 65px rgba(5,12,32,0.55);">🪄 <span style="color:#6bf2d8;">Greenplum AI Assistant</span> </div>
 
-![Greenplum Logo](https://greenplum.org/wp-content/uploads/2021/03/greenplum-logo.png) <!-- Placeholder image, you might want to replace this with a local one if available -->
+<div align="center">
+  <p style="margin:16px 0 0;font-size:18px;font-weight:500;color:#eaf6ff;">
+    Spring Boot · Spring AI · pgvector · MCP tooling · Liquid-glass chat workspace
+  </p>
+</div>
 
-## 🌟 Intelligent RAG for Greenplum Database
-
-This project provides a **production-ready RAG (Retrieval-Augmented Generation)** assistant tailored for **Greenplum Database**. It intelligently ingests official documentation and leverages **Spring AI 1.1.0-SNAPSHOT** with **MCP (Model Context Protocol)** support to deliver intelligent, context-aware answers.
-
----
-
-## ✨ Key Features
-
-*   **🧠 RAG-powered Q&A**: Get precise answers from Greenplum documentation.
-*   **📡 Version-Aware Context**: Automatically detects the connected Greenplum/PostgreSQL version and injects this context into AI prompts for highly relevant responses.
-*   **🗣️ Seamless Conversation Flow**: Maintains chat history to enable natural, multi-turn conversations.
-*   **🔌 MCP Client Integration**: Ready for dynamic tool integration via Model Context Protocol over HTTP SSE, expanding AI capabilities (currently disabled, waiting for your MCP servers!).
-*   **📚 Smart Document Chunking**: Utilizes `TokenTextSplitter` for intelligent document segmentation, ensuring optimal context for the AI.
-*   **📊 Production-Grade Metrics**: Integrated Prometheus metrics via Spring Boot Actuator for easy monitoring.
-*   **🛡️ Robust Error Handling**: Comprehensive request validation and global exception handling for a stable application.
-*   **⚙️ Highly Configurable**: Externalized configuration for easy customization via `application.yaml` or environment variables.
-*   **💬 Liquid Glass Chat UI**: Sleek, metallic chat experience with streaming-like feedback, chat memory, and live model telemetry.
+<p align="center">
+  <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.3.6-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+  <img alt="Java" src="https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white">
+  <img alt="Postgres" src="https://img.shields.io/badge/Greenplum%20/ PostgreSQL%20Compatible-336791?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img alt="pgvector" src="https://img.shields.io/badge/pgvector-powered-ff69b4?style=for-the-badge">
+  <img alt="MCP Ready" src="https://img.shields.io/badge/MCP-ready-5ecfff?style=for-the-badge">
+</p>
 
 ---
 
-## 🛠️ Prerequisites
+## 🧭 Table of Contents
 
-Before you begin, ensure you have the following installed:
-
-*   **Java 21**: The application is built with the latest LTS Java version.
-*   **Maven 3.9+**: The project uses a Maven Wrapper (`./mvnw`), so a local Maven installation is optional but recommended for advanced tasks.
-*   **Greenplum or PostgreSQL**: A running database instance with the `pgvector` extension enabled.
-*   **OpenAI API Key (optional)**: Supply to route chat and embeddings through OpenAI; otherwise the app targets a local OpenAI-compatible server.
+1. [Why It Shines](#-why-it-shines)
+2. [Architecture Snapshot](#-architecture-snapshot)
+3. [Front-End Experience Deep Dive](#-front-end-experience-deep-dive)
+4. [Back-End & AI Brain](#-back-end--ai-brain)
+5. [Run It Now](#-run-it-now)
+6. [Configuration Cheatsheet](#-configuration-cheatsheet)
+7. [API Quick Reference](#-api-quick-reference)
+8. [RAG & Data Flow](#-rag--data-flow)
+9. [Observability & Ops](#-observability--ops)
+10. [Security Checklist](#-security-checklist)
+11. [Development Workflow](#-development-workflow)
+12. [License & Credits](#-license--credits)
 
 ---
 
-## ⚙️ Configuration Essentials
+## ✨ Why It Shines
 
-All configurations can be managed in `src/main/resources/application.yaml` or through environment variables.
+- **🧠 Greenplum-native RAG** — Tailored prompt templates, doc indexing, and version-aware context keep answers aligned with GPDB’s release cadence.
+- **🌌 Aurora Chat Surface** — Animated, glassmorphism UI with live model telemetry for an immersive assistant experience.
+- **🧩 Model Context Protocol** — Plug in new tools over HTTP SSE; the UI includes a control center for configuring MCP servers on the fly.
+- **📡 Version Telemetry** — Auto-detects connected Greenplum/Postgres versions and threads that information into every conversation.
+- **📊 Production Friendly** — Flyway migrations, Micrometer metrics, Prometheus endpoint, and resilient HTTP clients are all baked in.
+- **🔐 Zero-leak Secrets** — API keys and encryption material are vaulted behind environment variables and AES-256-GCM (see `EncryptionService`).
 
-### 💾 Database Connection
+---
 
-Configure your database connection details:
+## 🧱 Architecture Snapshot
 
-```yaml
-spring:
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/gpdb}
-    username: ${DB_USERNAME:gpuser}
-    password: ${DB_PASSWORD:secret}
-```
+```mermaid
+flowchart LR
+  subgraph Client["🖥️ Liquid Glass UI"]
+    UIChat["Chat View<br/>chat.js + chat.css"]
+    UISettings["MCP Control Center<br/>settings.js"]
+  end
 
-### 🤖 Model Provider Selection
+  subgraph Spring["☕ Spring Boot 3.3"]
+    Controller["Docs / Chat REST"]
+    MCP["MCP Client (WebFlux)"]
+    RAG["DocsChatService<br/>+ PromptLoader"]
+    Vector["pgvector Repository"]
+  end
 
-By default the assistant talks to a local OpenAI-compatible gateway at `http://127.0.0.1:1234`. Adjust (or disable) the local setup with:
+  subgraph Data["🗄️ Greenplum / Postgres"]
+    DocsTable["gp_docs<br/>IVFFlat index"]
+    MCPConfig["mcp_servers<br/>Encrypted keys"]
+  end
 
-```bash
-export LOCAL_MODEL_BASE_URL="http://127.0.0.1:1234"
-export LOCAL_CHAT_MODEL="local-chat-model"
-export LOCAL_EMBEDDING_MODEL="local-embedding-model"
-# Optional: provide a key if your local gateway is secured
-export LOCAL_MODEL_API_KEY="local-mode-placeholder"
-```
+  subgraph AI["🤖 Model Providers"]
+    LocalLLM["Local OpenAI-compatible Gateway"]
+    OpenAI["OpenAI APIs"]
+  end
 
-Provide an OpenAI key to automatically switch both chat and embeddings to OpenAI. You can still override model IDs if you prefer specific variants:
-
-```bash
-export OPENAI_API_KEY=sk-...                      # Supplying a key flips to OpenAI mode
-export OPENAI_CHAT_MODEL=gpt-4o-mini              # Optional override
-export OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # Optional override
-export OPENAI_EMBEDDING_API_KEY=sk-...            # Optional different embedding key
-```
-
-For any other OpenAI-compatible provider, set `OPENAI_BASE_URL` and/or `OPENAI_EMBEDDING_BASE_URL` to the correct endpoint. If the embeddings path differs from `/v1/embeddings`, override `OPENAI_EMBEDDINGS_PATH`.
-
-| Environment Variable            | Purpose                                                            | Default / Notes                |
-|---------------------------------|--------------------------------------------------------------------|--------------------------------|
-| `LOCAL_MODEL_BASE_URL`          | Base URL for the local OpenAI-compatible gateway                   | `http://127.0.0.1:1234`        |
-| `LOCAL_CHAT_MODEL`              | Identifier for the local chat model                                | `local-chat-model`             |
-| `LOCAL_EMBEDDING_MODEL`         | Identifier for the local embedding model                           | `local-embedding-model`        |
-| `LOCAL_MODEL_API_KEY`           | Optional auth token for the local gateway                          | _not set_                      |
-| `OPENAI_API_KEY`                | Switches the app into OpenAI mode and authorizes API calls         | _provide manually_             |
-| `OPENAI_CHAT_MODEL`             | Override the OpenAI chat model ID                                  | `gpt-4o-mini`                  |
-| `OPENAI_EMBEDDING_MODEL`        | Override the OpenAI embedding model ID                             | `text-embedding-3-small`       |
-| `OPENAI_EMBEDDING_API_KEY`      | Optional alternate key for embeddings                              | _inherits `OPENAI_API_KEY`_    |
-| `OPENAI_BASE_URL`               | Custom OpenAI-compatible base URL for chat                         | `https://api.openai.com` (falls back to local base when unset) |
-| `OPENAI_EMBEDDING_BASE_URL`     | Custom OpenAI-compatible base URL for embeddings                   | Inherits chat base unless set  |
-| `OPENAI_EMBEDDINGS_PATH`        | Embedding endpoint path when the provider differs from `/v1/...`   | `/v1/embeddings`               |
-| `OPENAI_CHAT_TEMPERATURE`       | Chat completion temperature                                        | `0.8`                          |
-| `APP_VECTORSTORE_DIMENSIONS`    | Embedding width used for pgvector schema                           | `1536`                         |
-| `DOCS_INGEST_ON_STARTUP`        | Automatically ingest docs at boot                                  | `true`                         |
-| `MCP_CLIENT_ENABLED`            | Toggle MCP client integration                                      | `false`                        |
-| `APP_LOG_FILE`                  | Optional logback file output                                       | _not set_                      |
-
-### 📑 Document Ingestion Settings
-
-Define the Greenplum documentation URL and whether to ingest automatically on startup:
-
-```yaml
-app:
-  rag:
-    pdf-url: https://techdocs.broadcom.com/content/dam/broadcom/techdocs/us/en/pdf/vmware-tanzu/data-solutions/tanzu-greenplum/7/greenplum-database/greenplum-database.pdf
-    ingest-on-startup: ${DOCS_INGEST_ON_STARTUP:true} # Set to false to disable auto-ingestion
-```
-
-### 🔍 RAG Parameters
-
-Adjust how many relevant documents are retrieved and their similarity threshold:
-
-```yaml
-app:
-  rag:
-    top-k: 5                 # Number of most relevant documents to retrieve
-    similarity-threshold: 0.7 # Minimum similarity score (0.0-1.0)
-```
-
-### 📦 Vector Store Dimensions
-
-Ensure the pgvector schema matches the width of your embedding model:
-
-```yaml
-app:
-  vectorstore:
-    dimensions: 1536 # Use APP_VECTORSTORE_DIMENSIONS env var to override
-```
-
-```bash
-export APP_VECTORSTORE_DIMENSIONS=1024
-```
-
-### 🪵 Local Log File (optional)
-
-Mirror console logs to a local file during development by setting an environment variable before you start the app:
-
-```bash
-export APP_LOG_FILE="logs/gp-assistant.log"
-```
-
-Leave `APP_LOG_FILE` unset (or empty) to keep console-only logging.
-
-### 🌐 MCP Client Configuration
-
-The MCP client is **disabled by default**. Enable it when your MCP servers are ready:
-
-```yaml
-spring:
-  ai:
-    mcp:
-      client:
-        enabled: ${MCP_CLIENT_ENABLED:false} # Set to true to enable MCP client
-        type: SYNC # or SSE
-        request-timeout: 30s
-        sse:
-          connections:
-            schema:
-              url: ${MCP_SCHEMA_SERVER_URL:https://your-schema-server}
-            query:
-              url: ${MCP_QUERY_SERVER_URL:https://your-query-server}
+  Client -->|Fetch / JSON| Controller
+  Controller --> RAG
+  RAG --> Vector
+  Controller --> MCP
+  MCP -->|Tool Calls| AI
+  RAG -->|Embeddings| AI
+  Vector --> DocsTable
+  MCP --> MCPConfig
 ```
 
 ---
 
-## 🗄️ Database Setup
+## 🎨 Front-End Experience Deep Dive
 
-The application uses [Flyway](https://flywaydb.org/) for automatic database migrations at startup, which will:
+The chat surface lives in `src/main/resources/static/` and is intentionally framework-free for speed and control.
 
-*   ✅ Enable the `pgvector` extension.
-*   ✅ Create the `public.gp_docs` table with a 1536-dimensional embedding column.
-*   ✅ Create an `IVFFlat` Approximate Nearest Neighbor (ANN) index for lightning-fast similarity searches.
+### UI Stack at a Glance
 
-**Important**: If your database user lacks `CREATE EXTENSION` permissions, you'll need to run the following SQL command manually:
+| Layer | Significant Libraries / APIs | What They Bring |
+|-------|------------------------------|------------------|
+| `chat.css` | CSS custom properties, `@keyframes`, backdrop-filter, CSS grid/flexbox | Aurora gradients, glassmorphism panels, responsive layout, glowing status chips. |
+| `chat.js` | Vanilla JS, `fetch`, `localStorage`, HTML template cloning, dynamic Markdown renderer | Streaming-style chat bubbles, conversation persistence, JSON-to-table rendering, live config badges. |
+| `settings.js` | Fetch API, async/await, DOM diffing, optimistic UI updates | MCP server dashboard (add/edit/delete/test), API key visibility toggle, animated modals. |
+| HTML (`index.html`) | Semantic layout, SVG/emoji iconography, template slots | Accessible structure, quick templating for message cards and sidebars. |
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pgvector;
-```
+### Notable UX Details
 
----
-
-## 📚 Document Ingestion
-
-### Manual Ingestion
-
-You can trigger documentation ingestion at any time via the admin endpoint:
-
-```bash
-curl -X POST http://localhost:8080/admin/ingest
-```
-
-### Automatic Ingestion
-
-Set `app.rag.ingest-on-startup=true` in `application.yaml` (default) or override via environment variable:
-
-```bash
-export DOCS_INGEST_ON_STARTUP=true
-```
-
-**⚡ Performance Tips for Ingestion**
-*   For very large document sets, consider dropping the ANN index *before* ingestion and recreating it *after* the load, followed by an `ANALYZE` command.
-*   Adjust the `lists` parameter in your `IVFFlat` index based on your corpus size (e.g., `~200` for up to `100,000` chunks).
+- **Liquid Glass Palette** — CSS variables define neon cyan, violet, and teal accents; `backdrop-filter` delivers frosted glass panels.
+- **Markdown-with-tables Renderer** — `renderMarkdown` in `chat.js` parses fenced code, inline code, and auto-transforms JSON arrays into data tables.
+- **Conversation Memory** — Local storage retains a durable `conversationId`, keeping Spring AI’s memory threads intact across reloads.
+- **Telemetry Pill** — Real-time label shows whether you are in local mode or OpenAI mode along with the resolved base URLs.
+- **MCP Control Center** — Settings modal lists tool servers with health indicators, last-tested timestamps, activation toggles, and encrypted-key handling.
+- **Accessibility Hooks** — Focus rings, keyboard shortcuts (`Enter` vs `Shift+Enter`), and reduced motion fallbacks keep the UI usable beyond the visuals.
 
 ---
 
-## 🏃 Getting Started & Running
+## 🧠 Back-End & AI Brain
 
-A `run.sh` (for Unix/macOS/Linux) and `run.bat` (for Windows) script are provided for convenience.
+- **Spring Boot 3.3.6 + Java 21** — Modern baseline with virtual-thread friendly configuration and native record support.
+- **Spring AI 1.1.0-SNAPSHOT** — ChatClient + Advisor pipeline with prompt templates in `src/main/resources/prompts/`.
+- **pgvector** — IVFFlat indexing (`V2__create_mcp_servers_table.sql` and `gp_docs` schema) enables fast semantic search.
+- **MCP Integration** — `DynamicMcpClientManager` + `AuthorizingHttpClient` manage per-server encryption and HTTP SSE tool streams.
+- **Docs Chat Orchestration** — `DocsChatService` wraps retrieval, prompt assembly, and answer formatting.
+- **Resilience** — `ResilientMcpToolCallbackConfig` uses resilience4j-like backoff to keep tool calls stable under failure.
+
+---
+
+## 🚀 Run It Now
+
+> Requires Java 21+, a database with `pgvector`, and optionally an OpenAI-compatible endpoint.
 
 ```bash
-# (Optional) Supply an OpenAI key if you want to use OpenAI instead of your local model
-export OPENAI_API_KEY=sk-your-openai-api-key
+# 1. (Optional) Capture secrets in .env
+cp .env.template .env
 
-# First time setup: clean build and run
-./run.sh -c
+# 2. Fire it up
+./run.sh -c         # clean build + run (or run.bat on Windows)
 
-# Subsequent runs: just run
+# Subsequent runs
 ./run.sh
 
-# If you make code changes: build and run
-./run.sh -b
+# Want OpenAI? Export a key first
+export OPENAI_API_KEY=sk-your-key
+./run.sh
 ```
 
-Both scripts auto-load `.env` (when present) and print the chat/embedding models they will use before launching.
-They also show the resolved base URL and embedding endpoint, so you can confirm requests will hit the right server.
-
-The application will typically start on port `8080`.
+Visit `http://localhost:8080` for the chat UI or `http://localhost:8080/admin/ingest` to load docs manually.
 
 ---
 
-## 🖥️ Chat Experience
+## ⚙️ Configuration Cheatsheet
 
-Open `http://localhost:8080` and you will land on the new liquid-glass chat workspace. Highlights:
+> Every setting is available through `application.yaml` or environment variables.
 
-- Real-time conversation bubbles with a metallic / glass aesthetic tailored for dark rooms.
-- Local storage conversation IDs keep Spring AI chat memory threads intact between refreshes.
-- Live telemetry chip showing the active model, base URL, and embedding endpoint negotiated at startup.
-- Version selector for quick pivots across Greenplum and PostgreSQL baselines.
-- Keyboard friendly composer (`Enter` to send, `Shift+Enter` for multi-line input) plus automatic resizing.
+| Category | Variable | Default | Purpose |
+|----------|----------|---------|---------|
+| Database | `DB_URL` | `jdbc:postgresql://localhost:15432/gp_assistant` | Target Greenplum/Postgres connection. |
+|          | `DB_USERNAME` / `DB_PASSWORD` | `gpadmin` / `VMware1!` | Override in production. |
+| AI Models | `LOCAL_MODEL_BASE_URL` | `http://127.0.0.1:1234` | Local OpenAI-compatible gateway. |
+|          | `OPENAI_API_KEY` | _(unset)_ | Switches to OpenAI cloud mode automatically. |
+|          | `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Override chat model ID. |
+|          | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedder override. |
+| RAG | `DOCS_INGEST_ON_STARTUP` | `true` | Auto ingest documentation on boot. |
+|     | `APP_VECTORSTORE_DIMENSIONS` | `1536` | pgvector dimension match. |
+| Security | `APP_SECURITY_ENCRYPTION_KEY` | _(required for MCP UI)_ | 32-byte base64 key for AES-256-GCM. |
+| Logging | `APP_LOG_FILE` | _(unset)_ | Mirror logs to a file path. |
+| MCP | `GP_MCP_SERVER_API_KEY` | _(unset)_ | Default bearer passed to `gp-schema` server. |
 
-The UI talks directly to `/api/chat/message`, a JSON endpoint powered by the existing `DocsChatService` + Spring AI ChatClient/Advisor stack. You can still call `/api/ask` for plain-text responses or use the new `/api/chat/config` for runtime metadata.
+Need more? Check `src/main/resources/application.yaml` for the authoritative source.
 
 ---
 
-## 📡 API Endpoints
+## 📡 API Quick Reference
 
-### 💬 Ask Questions
+| Method & Path | Description |
+|---------------|-------------|
+| `POST /api/ask` | Lightweight text Q&A endpoint (returns a single answer string). |
+| `POST /api/chat/message` | Rich chat endpoint backing the UI; returns message, model telemetry, timestamps. |
+| `GET /api/chat/config` | Fetch active mode, base URLs, and seeds a conversation ID. |
+| `POST /admin/ingest` | Trigger documentation ingestion run. |
+| `GET /admin/database-info` | Fetch connection metadata (product, version). |
+| `GET /api/status` | Live health info (used for sidebar indicators). |
+| `GET /api/mcp/servers` et al. | CRUD for MCP servers (see `settings.js` for the exact routes). |
+| `GET /actuator/*` | Spring Boot actuator endpoints (`health`, `metrics`, `prometheus`). |
 
-**Endpoint**: `POST /api/ask`
-
-**Request Body Example**:
-
-```json
-{
-  "question": "How do I read EXPLAIN ANALYZE outputs in Greenplum 7?",
-  "targetVersion": "7.0",
-  "compatibleBaselines": ["6.x", "7.x"],
-  "defaultAssumeVersion": "7.0",
-  "conversationId": "user123-session456"
-}
-```
-
-**Response**: Plain text answer from the AI assistant.
-
-**Example `curl` call**:
+Quick test:
 
 ```bash
+curl -s http://localhost:8080/api/chat/config | jq
 curl -s -X POST http://localhost:8080/api/ask \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question":"What version of Greenplum are we connected to?",
-    "conversationId":"my-session"
-  }'
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is GPDB?", "conversationId":"docs-demo"}'
 ```
 
-### 🧠 Interactive Chat
+---
 
-- `POST /api/chat/message` — JSON payload/response for the glass chat experience. Returns the assistant answer, active conversation ID, timestamp, and model details.
-- `GET /api/chat/config` — Lightweight metadata endpoint exposing the resolved base URLs, embedding endpoint, models, and a conversation ID seed.
+## 🔁 RAG & Data Flow
 
-### 🧑‍💻 Admin Endpoints
+1. **Ingest** — `DocsIngestor` pulls the official PDF (`app.docs.pdf-url`), chunks via `TokenTextSplitter`, generates embeddings, and stores them in `gp_docs`.
+2. **Retrieve** — `DocsChatService` performs vector similarity with `top-k` + `similarity-threshold` gates.
+3. **Prompt** — `PromptLoader` injects context (connected version, baselines, schema hints) into `gp_system.txt`.
+4. **Respond** — Spring AI ChatClient coordinates with either your local gateway or OpenAI. Responses feed the UI markdown renderer.
+5. **Tool Call (optional)** — When MCP is enabled, the assistant can call configured tools for live database metadata before answering.
 
-#### Trigger Document Ingestion
+Performance tips:
+- Adjust ANN `lists` in `V2__create_mcp_servers_table.sql` when scaling past 100k chunks.
+- Consider disabling the index during bulk ingestion, then re-creating.
+- Run `ANALYZE gp_docs` after large ingest batches.
+
+---
+
+## 📈 Observability & Ops
+
+- Prometheus scrape: `GET /actuator/prometheus`
+- Interesting custom metrics: `gp_assistant.docs.ingest.*`, `gp_assistant.chat.*`, `gp_assistant.api.ask`.
+- Structured logging: console JSON optional via `APP_LOG_FILE`.
+- Health dashboard: `GET /actuator/health` (UI sidebar consumes `/api/status` for richer detail).
+- MCP diagnostics: `GET /api/mcp/servers/{id}/logs` (see controller) to trace tool interactions.
+
+---
+
+## 🔐 Security Checklist
+
+- 🔑 Provide `APP_SECURITY_ENCRYPTION_KEY` before enabling the MCP settings UI — encrypted API keys never touch disk in plain text.
+- 🧱 Deploy behind TLS (reverse proxy or Spring Boot native SSL) — sample config assumes HTTPS in production.
+- 🧾 Externalize secrets (`.env`, Vault, Kubernetes secrets) and never commit `.env` files.
+- 🛡️ Add authentication (Spring Security / OAuth) before exposing endpoints outside a trusted network.
+- 🕵️ Enable database least privilege: ingestion user needs `CREATE EXTENSION` and CRUD on `gp_docs`, nothing more.
+
+---
+
+## 🛠️ Development Workflow
+
 ```bash
-POST /admin/ingest
+# Format & lint (coming soon)
+./mvnw spotless:apply
+
+# Run unit tests
+./mvnw test
+
+# Run only the RAG integration test
+./mvnw -Dtest=RagQueryTest test
 ```
 
-#### Get Database Information
-```bash
-GET /admin/database-info
-```
-
-**Response Example**:
-```json
-{
-  "productName": "Greenplum Database",
-  "version": "7.1.0",
-  "fullVersion": "Greenplum Database 7.1.0",
-  "isGreenplum": true
-}
-```
-
-### ⚙️ MCP Tools Introspection (When enabled)
-
-```bash
-GET /api/mcp/tools
-```
-
-Returns a list of currently registered MCP tool names.
-
-### 📈 Actuator Endpoints
-
-Standard Spring Boot Actuator endpoints for monitoring:
-
-*   `GET /actuator/health`       # Application health check
-*   `GET /actuator/metrics`      # Comprehensive application metrics
-*   `GET /actuator/prometheus`   # Prometheus-formatted metrics
+Recommended enhancements:
+- Add GitHub Actions workflow mirroring the above steps.
+- Containerize with Docker Compose (Greenplum, vector-enabled Postgres, assistant app).
+- Introduce streaming chat responses using Server-Sent Events for incremental token updates.
 
 ---
 
-## 📊 Custom Metrics
+## 📜 License & Credits
 
-The application exposes the following custom metrics (via Micrometer/Prometheus):
+Licensed under the [Apache License 2.0](LICENSE).
 
-*   `gp_assistant.docs.ingest.success`: Counter for successful document ingestions.
-*   `gp_assistant.docs.ingest.failure`: Counter for failed document ingestions.
-*   `gp_assistant.docs.ingest.duration`: Timer for the duration of document ingestion processes.
-*   `gp_assistant.chat.queries`: Counter for the total number of chat queries processed.
-*   `gp_assistant.chat.query.duration`: Timer for the time taken to process individual chat queries.
-*   `gp_assistant.api.ask`: Request timing for the `/api/ask` endpoint.
+Huge thanks to:
+- [Spring AI](https://docs.spring.io/spring-ai/reference/) for the prompt orchestration tooling.
+- [Greenplum Database](https://greenplum.org/) for the MPP engine.
+- [pgvector](https://github.com/pgvector/pgvector) for fast semantic search.
+- [OpenAI](https://openai.com/) and the growing ecosystem of OpenAI-compatible gateways.
 
----
-
-## 🧰 Model Context Protocol (MCP)
-
-This application includes **MCP client support** using Spring AI's `spring-ai-starter-mcp-client-webflux` artifact. MCP enables dynamic tool integration with AI models via HTTP Server-Sent Events (SSE).
-
-### 🧐 How It Works
-
-1.  **Tool Discovery**: At startup, the MCP client discovers tools from configured servers.
-2.  **Dynamic Integration**: Discovered tools are exposed as dynamic `ToolCallbacks` to the AI model.
-3.  **Tool Execution**: When the AI model decides to use a tool, the call is streamed over SSE to the MCP server.
-4.  **Result Streaming**: Results from the MCP server are streamed back and seamlessly incorporated into the AI's response.
-
-### 💡 Example Use Cases
-
-*   **Schema Server**: Dynamically query database schemas (e.g., list relations, describe tables, get distribution keys).
-*   **Query Server**: Execute read-only SQL queries or analyze query plans using database-specific tools.
-*   **Admin Server**: Perform administrative tasks (e.g., `ANALYZE`, `VACUUM`), or retrieve database statistics.
-
----
-
-## 🗣️ Conversation History
-
-The application maintains in-memory conversation history. To keep context across multiple requests, simply include the `conversationId` field:
-
-**First Request**:
-```json
-{
-  "question": "What version of Greenplum are we currently connected to?",
-  "conversationId": "my-unique-session-id"
-}
-```
-
-**Follow-up Request (same conversation)**:
-```json
-{
-  "question": "Does this version support column-oriented storage?",
-  "conversationId": "my-unique-session-id"
-}
-```
-
----
-
-## 🔒 Security Considerations
-
-*   **Authentication**: API endpoints are currently **unauthenticated**. For production use, consider adding Spring Security.
-*   **Credentials**: Database and API keys should *always* be externalized (e.g., environment variables, Spring Cloud Config, Vault).
-*   **HTTPS**: Always use HTTPS in production environments.
-
----
-
-## 🐳 Docker Support (Future)
-
-A `docker-compose.yaml` setup for easily running Greenplum Database and this AI assistant will be added in a future release.
-
----
-
-## 📂 Project Structure Highlights
-
-*   `src/main/resources/prompts/`: Custom system and user prompt templates for the AI model.
-*   `src/main/resources/db/migration/`: Flyway migration scripts for database schema management.
-*   `src/main/java/com/baskettecase/gpassistant/`: Main Java source code.
-
----
-
-## 🤝 Contributing
-
-This project is a minimal starter. Contributions are welcome to extend its functionality, for example:
-
-*   Implementing robust authentication and authorization.
-*   Integrating with a persistent chat memory (e.g., Redis, database).
-*   Adding document versioning and tracking capabilities.
-*   Implementing streaming responses for enhanced user experience.
-*   Developing additional MCP tool servers for more sophisticated interactions.
-*   Building a responsive web UI for the chat interface.
-
----
-
-## 📜 License
-
-This project is licensed under the [Apache License, Version 2.0](LICENSE).
-
----
-
-## 🙏 Acknowledgments
-
-A big thank you to the open-source projects and communities that make this possible:
-
-*   [Spring AI](https://docs.spring.io/spring-ai/reference/1.1-SNAPSHOT/) - The powerful framework for AI integration.
-*   [Greenplum Database](https://greenplum.org/) - The robust MPP database.
-*   [OpenAI](https://openai.com/) - Providing cutting-edge embedding and chat models.
-*   [pgvector](https://github.com/pgvector/pgvector) - Enabling efficient vector similarity search in PostgreSQL.
-
----
-
-For more detailed information about Spring AI's MCP support, refer to the [official Spring AI documentation](https://docs.spring.io/spring-ai/reference/1.1-SNAPSHOT/api/model-context-protocol.html).
+<p align="center" style="font-size:14px;color:#8f9fff;margin-top:32px;">
+Crafted with 💚 for data engineers who live in Greenplum.
+</p>
