@@ -1,21 +1,25 @@
 package com.baskettecase.gpassistant.service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class GreenplumVersionService {
+
+    private static final Logger log = LoggerFactory.getLogger(GreenplumVersionService.class);
 
     private final JdbcTemplate jdbcTemplate;
     private String cachedVersion;
     private String cachedProductName;
     private volatile boolean initialized = false;
+
+    public GreenplumVersionService(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
     public void initializeVersionInfo() {
         if (!initialized) {

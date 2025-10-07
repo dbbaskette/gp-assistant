@@ -3,8 +3,8 @@ package com.baskettecase.gpassistant.service;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -17,21 +17,30 @@ import com.baskettecase.gpassistant.PromptLoader;
 
 import jakarta.annotation.PostConstruct;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class DocsChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocsChatService.class);
 
     private final ChatClient chatClient;
     private final QuestionAnswerAdvisor qaAdvisor;
     private final ChatMemory chatMemory;
     private final GreenplumVersionService versionService;
     private final MeterRegistry meterRegistry;
-    
-    // MCP Tool Provider - will be null if MCP is not enabled
-    // TODO: Uncomment and use when MCP servers are configured
-    // @Autowired(required = false)
-    // private SyncMcpToolCallbackProvider toolCallbackProvider;
+    private final org.springframework.ai.tool.ToolCallbackProvider toolCallbackProvider;
+
+    public DocsChatService(ChatClient chatClient, QuestionAnswerAdvisor qaAdvisor,
+                          ChatMemory chatMemory, GreenplumVersionService versionService,
+                          MeterRegistry meterRegistry,
+                          @org.springframework.beans.factory.annotation.Autowired(required = false)
+                          org.springframework.ai.tool.ToolCallbackProvider toolCallbackProvider) {
+        this.chatClient = chatClient;
+        this.qaAdvisor = qaAdvisor;
+        this.chatMemory = chatMemory;
+        this.versionService = versionService;
+        this.meterRegistry = meterRegistry;
+        this.toolCallbackProvider = toolCallbackProvider;
+    }
 
     private Counter queryCounter;
     private Timer queryTimer;
@@ -49,16 +58,18 @@ public class DocsChatService {
 
     /**
      * Process a user question with conversation history support.
-     * 
+     *
      * @param userQuestion The user's question
      * @param targetVersion Target Greenplum version for the response
      * @param compatibleBaselines Compatible version baselines
      * @param defaultAssume Default version to assume if not specified
      * @param conversationId Unique conversation ID (for history tracking)
+     * @param databaseName Current database context (optional)
+     * @param schemaName Current schema context (optional)
      * @return The assistant's response
      */
-    public String ask(String userQuestion, String targetVersion, String[] compatibleBaselines, 
-                     String defaultAssume, String conversationId) {
+    public String ask(String userQuestion, String targetVersion, String[] compatibleBaselines,
+                     String defaultAssume, String conversationId, String databaseName, String schemaName) {
         Timer.Sample sample = Timer.start(meterRegistry);
         
         try {
@@ -77,7 +88,9 @@ public class DocsChatService {
                     .replace("{{COMPATIBLE_BASELINES}}", java.util.Arrays.toString(compatibleBaselines))
                     .replace("{{DEFAULT_ASSUME_VERSION}}", defaultAssume)
                     .replace("{{CONNECTED_VERSION}}", connectedVersion)
-                    .replace("{{IS_GREENPLUM}}", String.valueOf(isGreenplum));
+                    .replace("{{IS_GREENPLUM}}", String.valueOf(isGreenplum))
+                    .replace("{{DATABASE_NAME}}", databaseName != null && !databaseName.isEmpty() ? databaseName : "not specified")
+                    .replace("{{SCHEMA_NAME}}", schemaName != null && !schemaName.isEmpty() ? schemaName : "not specified");
 
             // Load and customize user prompt
             String user = PromptLoader.load("prompts/gp_user.txt")
@@ -86,6 +99,8 @@ public class DocsChatService {
                     .replace("{{COMPATIBLE_BASELINES}}", java.util.Arrays.toString(compatibleBaselines))
                     .replace("{{DEFAULT_ASSUME_VERSION}}", defaultAssume)
                     .replace("{{CONNECTED_VERSION}}", connectedVersion)
+                    .replace("{{DATABASE_NAME}}", databaseName != null && !databaseName.isEmpty() ? databaseName : "not specified")
+                    .replace("{{SCHEMA_NAME}}", schemaName != null && !schemaName.isEmpty() ? schemaName : "not specified")
                     .replace("{{RESOURCES}}", "<resources will be stitched by the application>");
 
             // Build the prompt with conversation history
@@ -103,19 +118,29 @@ public class DocsChatService {
                 promptBuilder.advisors(spec -> spec
                         .param(ChatMemory.CONVERSATION_ID, conversationId));
             }
-            
-            // Add MCP tools if available
-            // TODO: Uncomment when MCP servers are configured
-            // if (toolCallbackProvider != null) {
-            //     ToolCallback[] mcpTools = toolCallbackProvider.getToolCallbacks();
-            //     if (mcpTools != null && mcpTools.length > 0) {
-            //         log.debug("Adding {} MCP tools to prompt", mcpTools.length);
-            //         promptBuilder.toolCallbacks(mcpTools);
-            //     }
-            // }
+
+            // Add MCP tools explicitly to the prompt request
+            // Note: defaultToolCallbacks() on ChatClient.Builder doesn't seem to work with local models
+            // so we explicitly add tools per-request
+            log.debug("toolCallbackProvider is null: {}", toolCallbackProvider == null);
+            if (toolCallbackProvider != null) {
+                org.springframework.ai.tool.ToolCallback[] tools = toolCallbackProvider.getToolCallbacks();
+                log.debug("Tool callbacks retrieved: {} tools", tools != null ? tools.length : "null");
+                if (tools != null && tools.length > 0) {
+                    log.info("✅ Adding {} MCP tools to chat request", tools.length);
+                    promptBuilder.toolCallbacks(tools);
+                } else {
+                    log.warn("⚠️  No MCP tools available - toolCallbackProvider returned empty/null");
+                }
+            } else {
+                log.warn("⚠️  ToolCallbackProvider is null - no MCP tools available");
+            }
 
             // Execute the chat
-            String response = promptBuilder.call().content();
+            // Use .chatResponse() instead of .content() to properly handle tool calls
+            // When tools are called, Spring AI needs to execute them and send results back to LLM
+            org.springframework.ai.chat.model.ChatResponse chatResponse = promptBuilder.call().chatResponse();
+            String response = chatResponse.getResult().getOutput().getText();
             
             // Store conversation history
             if (conversationId != null && !conversationId.isEmpty()) {
@@ -140,8 +165,8 @@ public class DocsChatService {
     /**
      * Convenience method without conversation ID (stateless interaction).
      */
-    public String ask(String userQuestion, String targetVersion, String[] compatibleBaselines, 
+    public String ask(String userQuestion, String targetVersion, String[] compatibleBaselines,
                      String defaultAssume) {
-        return ask(userQuestion, targetVersion, compatibleBaselines, defaultAssume, null);
+        return ask(userQuestion, targetVersion, compatibleBaselines, defaultAssume, null, null, null);
     }
 }

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenplum AI Assistant</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🤖</text></svg>">
+    <link rel="stylesheet" href="/assets/css/chat.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" src="/assets/js/chat.js" defer></script>
+    <script type="module" src="/assets/js/settings.js" defer></script>
+</head>
+<body>
+    <div class="aurora"></div>
+    <div class="aurora aurora--two"></div>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar__header">
+                <div class="sidebar__logo">🤖</div>
+            </div>
+            <nav class="sidebar__status">
+                <div class="status-indicator" id="api-status" title="API Status">
+                    <div class="status-indicator__icon">🌐</div>
+                    <div class="status-indicator__label">API</div>
+                    <div class="status-indicator__dot status-indicator__dot--green"></div>
+                </div>
+                <div class="status-indicator" id="db-status" title="Database Status">
+                    <div class="status-indicator__icon">💾</div>
+                    <div class="status-indicator__label">DB</div>
+                    <div class="status-indicator__dot status-indicator__dot--checking"></div>
+                </div>
+                <div class="status-indicator" id="mcp-status" title="MCP Server">
+                    <div class="status-indicator__icon">🔌</div>
+                    <div class="status-indicator__label">MCP</div>
+                    <div class="status-indicator__dot status-indicator__dot--checking"></div>
+                </div>
+                <div class="status-indicator" id="model-status" title="Model Status">
+                    <div class="status-indicator__icon">🧠</div>
+                    <div class="status-indicator__label">Model</div>
+                    <div class="status-indicator__dot status-indicator__dot--green"></div>
+                </div>
+            </nav>
+            <div class="sidebar__footer">
+                <button id="settings-btn" class="settings-btn" title="Settings" aria-label="Settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m5.196-13.196l-4.242 4.242m-5.908 5.908l-4.242 4.242M23 12h-6m-6 0H1m18.196 5.196l-4.242-4.242m-5.908-5.908l-4.242-4.242"></path>
+                    </svg>
+                </button>
+            </div>
+        </aside>
+        <main class="chat-app">
+            <header class="chat-app__header">
+                <div>
+                    <h1>Greenplum AI Assistant</h1>
+                    <p class="chat-app__subtitle">RAG-powered guidance for Greenplum and PostgreSQL</p>
+                </div>
+                <div class="chat-app__meta">
+                    <div class="meta-line">
+                        <span class="dot dot--online"></span>
+                        <span id="model-mode">Detecting model…</span>
+                    </div>
+                    <div class="meta-line" id="endpoint-meta"></div>
+                </div>
+            </header>
+
+            <section class="chat-app__console" id="chat-window" aria-live="polite"></section>
+
+            <footer class="chat-app__footer">
+                <form id="chat-form" autocomplete="off">
+                    <div class="composer">
+                        <div class="composer__selectors">
+                            <div class="selector-group">
+                                <label for="database-select" class="composer__label">Database</label>
+                                <select id="database-select" class="composer__select">
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="selector-group">
+                                <label for="schema-select" class="composer__label">Schema</label>
+                                <select id="schema-select" class="composer__select">
+                                    <option value="">Select database first</option>
+                                </select>
+                            </div>
+                            <div class="selector-group">
+                                <label for="target-version" class="composer__label">Target version</label>
+                                <select id="target-version" class="composer__select">
+                                    <option value="7.0">Greenplum 7.x</option>
+                                    <option value="6.0">Greenplum 6.x</option>
+                                    <option value="5.0">Greenplum 5.x</option>
+                                    <option value="postgresql">PostgreSQL</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="composer__input-wrapper">
+                            <textarea id="chat-input" placeholder="Ask anything about Greenplum… (Shift + Enter for new line)" rows="1" required></textarea>
+                            <button type="submit" class="composer__send" aria-label="Send message">
+                                <span class="send-icon"></span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </footer>
+        </main>
+    </div>
+    <template id="message-template">
+        <article class="message">
+            <div class="message__avatar"></div>
+            <div class="message__bubble">
+                <div class="message__author"></div>
+                <div class="message__body"></div>
+            </div>
+        </article>
+    </template>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none;">
+        <div class="modal__overlay"></div>
+        <div class="modal__content modal__content--wide">
+            <div class="modal__header">
+                <h2>MCP Server Configuration</h2>
+                <button class="modal__close" id="settings-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal__body">
+                <!-- MCP Servers List -->
+                <div class="settings-section">
+                    <div class="settings-section__header">
+                        <h3>MCP Servers</h3>
+                        <button id="add-server-btn" class="btn btn--small btn--primary">+ Add Server</button>
+                    </div>
+                    <p class="settings-description">
+                        Configure MCP servers for dynamic tool integration. Only one server can be active at a time.
+                    </p>
+                    <div id="mcp-servers-list" class="mcp-servers-list">
+                        <!-- Servers will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Add/Edit Server Form (hidden by default) -->
+                <div id="server-form-section" class="settings-section" style="display: none;">
+                    <h3 id="form-title">Add MCP Server</h3>
+                    <form id="server-form">
+                        <input type="hidden" id="server-id" value="">
+
+                        <div class="form-group">
+                            <label for="server-name">Name *</label>
+                            <input type="text" id="server-name" class="form-input"
+                                   placeholder="GP Production" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="server-url">Server URL *</label>
+                            <input type="text" id="server-url" class="form-input"
+                                   placeholder="http://localhost:8082" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="server-api-key">API Key *</label>
+                            <div class="input-group">
+                                <input type="password" id="server-api-key" class="form-input"
+                                       placeholder="gpmcp_live_..." autocomplete="off">
+                                <button type="button" id="toggle-api-key" class="btn btn--secondary btn--icon"
+                                        title="Show/Hide API Key">
+                                    👁️
+                                </button>
+                            </div>
+                            <small class="form-help">
+                                Generate an API key at:
+                                <a href="http://localhost:8082/admin/api-keys" target="_blank" rel="noopener">
+                                    GP MCP Server Admin
+                                </a>
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="server-description">Description (optional)</label>
+                            <textarea id="server-description" class="form-input" rows="2"
+                                      placeholder="Production Greenplum server"></textarea>
+                        </div>
+
+                        <div id="server-form-status" class="settings-status" style="display: none;"></div>
+
+                        <div class="form-actions">
+                            <button type="button" id="cancel-form-btn" class="btn btn--secondary">Cancel</button>
+                            <button type="button" id="test-connection-btn" class="btn btn--secondary">Test Connection</button>
+                            <button type="submit" class="btn btn--primary">Save Server</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

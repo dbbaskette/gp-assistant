@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
             echo "  OPENAI_API_KEY             Route traffic to OpenAI when provided"
             echo "  LOCAL_MODEL_BASE_URL       Override local gateway base URL"
             echo "  APP_VECTORSTORE_DIMENSIONS Match pgvector schema to embedding width"
-            echo "  MCP_CLIENT_ENABLED         Enable MCP client (default: false)"
+            echo "  SPRING_AI_MCP_CLIENT_ENABLED  Enable MCP client (default: false)"
             echo "  DOCS_INGEST_ON_STARTUP     Ingest docs on startup (default: true)"
             exit 0
             ;;
@@ -95,7 +95,7 @@ fi
 # Display configuration
 echo -e "${BLUE}==> Starting Greenplum Assistant${NC}"
 echo -e "Version: Spring Boot 3.5.6, Spring AI 1.1.0-SNAPSHOT"
-echo -e "MCP Client: ${MCP_CLIENT_ENABLED:-false}"
+echo -e "MCP Client: ${SPRING_AI_MCP_CLIENT_ENABLED:-false}"
 echo -e "Ingest on Startup: ${DOCS_INGEST_ON_STARTUP:-true}"
 echo ""
 

@@ -1,0 +1,207 @@
+package com.baskettecase.gpassistant.controller;
+
+import com.baskettecase.gpassistant.service.DocsChatService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/chat")
+@Validated
+public class ChatUiController {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatUiController.class);
+
+    private final DocsChatService chatService;
+    private final Environment environment;
+
+    public ChatUiController(DocsChatService chatService, Environment environment) {
+        this.chatService = chatService;
+        this.environment = environment;
+    }
+
+    @PostMapping(path = "/message", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ChatMessageResponse> message(@Valid @RequestBody ChatMessageRequest request) {
+        String conversationId = StringUtils.hasText(request.getConversationId())
+                ? request.getConversationId()
+                : UUID.randomUUID().toString();
+
+        String targetVersion = StringUtils.hasText(request.getTargetVersion())
+                ? request.getTargetVersion()
+                : "7.0";
+
+        String[] baselines = (request.getCompatibleBaselines() != null && request.getCompatibleBaselines().length > 0)
+                ? request.getCompatibleBaselines()
+                : new String[]{"6.x", "7.x"};
+
+        String assume = StringUtils.hasText(request.getDefaultAssumeVersion())
+                ? request.getDefaultAssumeVersion()
+                : targetVersion;
+
+        String database = request.getDatabase();
+        String schema = request.getSchema();
+
+        log.info("Chat UI message: question='{}' conversation='{}' targetVersion='{}' database='{}' schema='{}'",
+                trimForLog(request.getQuestion()), conversationId, targetVersion, database, schema);
+
+        String answer = chatService.ask(request.getQuestion(), targetVersion, baselines, assume, conversationId, database, schema);
+        ChatMessageResponse response = new ChatMessageResponse(
+                answer,
+                conversationId,
+                Instant.now().toString(),
+                environment.getProperty("spring.ai.openai.chat.options.model", "local-chat-model")
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping(path = "/config", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ChatConfigResponse config() {
+        String baseUrl = environment.getProperty("spring.ai.openai.base-url", "http://127.0.0.1:1234");
+        String embeddingBase = environment.getProperty("spring.ai.openai.embedding.base-url", baseUrl);
+        String embeddingPath = environment.getProperty("spring.ai.openai.embedding.embeddings-path", "/v1/embeddings");
+        String apiKey = environment.getProperty("spring.ai.openai.api-key", "local-mode-placeholder");
+        String chatModel = environment.getProperty("spring.ai.openai.chat.options.model", "local-chat-model");
+        String embeddingModel = environment.getProperty("spring.ai.openai.embedding.options.model", "local-embedding-model");
+
+        boolean isOpenAi = StringUtils.hasText(apiKey) && !"local-mode-placeholder".equals(apiKey);
+
+        return new ChatConfigResponse(
+                isOpenAi ? "OPENAI" : "LOCAL",
+                baseUrl,
+                embeddingBase + embeddingPath,
+                chatModel,
+                embeddingModel,
+                conversationIdSeed()
+        );
+    }
+
+    private String conversationIdSeed() {
+        return UUID.randomUUID().toString();
+    }
+
+    private String trimForLog(String text) {
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        return text.length() > 120 ? text.substring(0, 117) + "…" : text;
+    }
+
+    public static class ChatMessageRequest {
+        @NotBlank(message = "Question is required")
+        private String question;
+        private String conversationId;
+        private String targetVersion;
+        private String[] compatibleBaselines;
+        private String defaultAssumeVersion;
+        private String database;
+        private String schema;
+
+        public String getQuestion() {
+            return question;
+        }
+
+        public void setQuestion(String question) {
+            this.question = question;
+        }
+
+        public String getConversationId() {
+            return conversationId;
+        }
+
+        public void setConversationId(String conversationId) {
+            this.conversationId = conversationId;
+        }
+
+        public String getTargetVersion() {
+            return targetVersion;
+        }
+
+        public void setTargetVersion(String targetVersion) {
+            this.targetVersion = targetVersion;
+        }
+
+        public String[] getCompatibleBaselines() {
+            return compatibleBaselines;
+        }
+
+        public void setCompatibleBaselines(String[] compatibleBaselines) {
+            this.compatibleBaselines = compatibleBaselines;
+        }
+
+        public String getDefaultAssumeVersion() {
+            return defaultAssumeVersion;
+        }
+
+        public void setDefaultAssumeVersion(String defaultAssumeVersion) {
+            this.defaultAssumeVersion = defaultAssumeVersion;
+        }
+
+        public String getDatabase() {
+            return database;
+        }
+
+        public void setDatabase(String database) {
+            this.database = database;
+        }
+
+        public String getSchema() {
+            return schema;
+        }
+
+        public void setSchema(String schema) {
+            this.schema = schema;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ChatMessageRequest that = (ChatMessageRequest) o;
+            return Objects.equals(question, that.question) &&
+                    Objects.equals(conversationId, that.conversationId) &&
+                    Objects.equals(targetVersion, that.targetVersion) &&
+                    java.util.Arrays.equals(compatibleBaselines, that.compatibleBaselines) &&
+                    Objects.equals(defaultAssumeVersion, that.defaultAssumeVersion);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Objects.hash(question, conversationId, targetVersion, defaultAssumeVersion);
+            result = 31 * result + java.util.Arrays.hashCode(compatibleBaselines);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "ChatMessageRequest{" +
+                    "question='" + question + '\'' +
+                    ", conversationId='" + conversationId + '\'' +
+                    ", targetVersion='" + targetVersion + '\'' +
+                    ", compatibleBaselines=" + java.util.Arrays.toString(compatibleBaselines) +
+                    ", defaultAssumeVersion='" + defaultAssumeVersion + '\'' +
+                    '}';
+        }
+    }
+
+    private record ChatMessageResponse(String answer, String conversationId, String respondedAt, String model) {}
+
+    private record ChatConfigResponse(String mode, String baseUrl, String embeddingEndpoint,
+                                      String chatModel, String embeddingModel, String conversationId) {}
+}

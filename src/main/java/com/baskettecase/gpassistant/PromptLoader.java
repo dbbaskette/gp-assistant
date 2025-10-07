@@ -1,13 +1,15 @@
 package com.baskettecase.gpassistant;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-@Slf4j
 public class PromptLoader {
+
+    private static final Logger log = LoggerFactory.getLogger(PromptLoader.class);
     
     /**
      * Load a prompt from the classpath.
